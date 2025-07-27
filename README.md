@@ -12,11 +12,60 @@ AI-driven platform for fetching, evaluating, and displaying images that match us
 
 # Deployment
 
-# Features
-
 # Docs
 
+## Backend
+
+The backend for the AI-powered Pinterest scraper system uses FastAPI, Pydantic, and Playwright to scrape Pinterest images based on visual prompts and evaluate their relevance using AI.
+
+### Technologies
+
+**FastAPI + Python**: Backend framework chosen for high performance, easy-to-use async capabilities, automatic OpenAPI documentation, and type checking with Pydantic.
+
+**MongoDB with pymongo**: Synchronous MongoDB client for storing prompt sessions, scraped images, and evaluation results. Replaced deprecated Motor library with direct pymongo integration.
+
+**Playwright**: Headless browser automation for Pinterest scraping, simulating user behavior to align with visual prompts.
+
+**OpenAI API**: Used for evaluating image relevance to the original prompt with AI-powered scoring.
+
+### Folder Structure
+
+```
+backend/
+├── app/
+│   ├── __init__.py
+│   ├── main.py              # FastAPI application entry point
+│   ├── config.py            # Configuration settings
+│   ├── database.py          # MongoDB connection
+│   ├── models/              # Pydantic models
+│   │   ├── __init__.py
+│   │   ├── prompt.py
+│   │   └── image.py
+│   ├── routers/             # API endpoints
+│   │   ├── __init__.py
+│   │   ├── prompts.py
+│   │   └── images.py
+│   └── services/            # Business logic
+│       ├── __init__.py
+│       ├── pinterest_scraper.py
+│       └── image_evaluator.py
+├── requirements.txt         # Project dependencies
+└── .env.example             # Example environment variables
+```
+
+### API Endpoints
+
+- `POST /api/v1/prompts` - Create a new visual prompt
+- `GET /api/v1/prompts` - List all prompts
+- `GET /api/v1/prompts/{prompt_id}` - Get a specific prompt
+- `GET /api/v1/images/prompt/{prompt_id}` - Get images for a specific prompt
+- `PUT /api/v1/images/{image_id}/approve` - Approve or reject an image
+
 ## Frontend
+
+The frontend for the AI-powered Pinterest scraper system uses Vite, TypeScript, and React to provide a modern, responsive, and user-friendly interface for interacting with the backend API.
+
+### Technologies
 
 **Vite + TypeScript + React**: Chosen for fast development experience with hot module replacement, excellent TypeScript support, and modern build tooling. Vite provides lightning-fast dev server startup and optimized production builds.
 
@@ -47,9 +96,11 @@ frontend/
 └── package.json           # Dependencies and scripts
 ```
 
-
-
 # Release History
+* 0.1 - First commit
+* 0.2 - Frontend setup
+* 0.3 - Backend setup
+
 
 # License
 
