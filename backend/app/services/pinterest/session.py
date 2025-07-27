@@ -130,9 +130,15 @@ class PinterestSession:
             return []
         
         try:
-            print("Navigating to Pinterest feed...")
-            await self.page.goto("https://www.pinterest.com/", timeout=30000)
-            await asyncio.sleep(5)
+            # Check if we're already on Pinterest homepage
+            current_url = self.page.url
+            if "pinterest.com" in current_url and "/login" not in current_url:
+                print("Already on Pinterest homepage, no need to navigate")
+            else:
+                print("Navigating to Pinterest feed...")
+                await self.page.goto("https://www.pinterest.com/", timeout=30000)
+            
+            await asyncio.sleep(3)
             
             # Wait for the feed to load
             print("Waiting for feed to load...")
