@@ -1,7 +1,10 @@
-from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Depends
 from typing import List
-from uuid import UUID
-from app.models.prompt import Prompt, PromptCreate
+from bson import ObjectId
+import pymongo
+from app.models.prompt import Prompt, PromptCreate, PyObjectId
+from app.models.session import Session, SessionCreate
+from app.models.image import Pin, PinCreate
 from app.database import get_database
 from app.services.pinterest_scraper import PinterestScraper
 from app.services.image_evaluator import ImageEvaluator
@@ -13,21 +16,41 @@ router = APIRouter(
     tags=["prompts"]
 )
 
-def process_prompt_background(prompt_id: UUID, prompt_text: str, db):
+def process_prompt_background(prompt_id: ObjectId, prompt_text: str, db):
     # Run in a separate thread to handle the async operations
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     
     try:
-        # Update status to in_progress
-        db.prompts.update_one(
-            {"id": str(prompt_id)},
-            {"$set": {"status": "in_progress"}}
+        # Create session for warmup stage
+        warmup_session = SessionCreate(
+            prompt_id=prompt_id,
+            stage="warmup",
+            status="pending",
+            log=["Starting Pinterest warmup phase"]
         )
+        session_dict = warmup_session.model_dump()
+        db.sessions.insert_one(session_dict)
         
         # Initialize scraper and run in the event loop
         scraper = PinterestScraper()
         loop.run_until_complete(scraper.initialize())
+        
+        # Update session status to completed
+        db.sessions.update_one(
+            {"prompt_id": prompt_id, "stage": "warmup"},
+            {"$set": {"status": "completed"}, "$push": {"log": "Completed warmup phase"}}
+        )
+        
+        # Create session for scraping stage
+        scraping_session = SessionCreate(
+            prompt_id=prompt_id,
+            stage="scraping",
+            status="pending",
+            log=["Starting Pinterest scraping phase"]
+        )
+        session_dict = scraping_session.model_dump()
+        db.sessions.insert_one(session_dict)
         
         # Simulate Pinterest activity and scrape pins
         loop.run_until_complete(scraper.simulate_pinterest_activity(prompt_text))
@@ -36,6 +59,22 @@ def process_prompt_background(prompt_id: UUID, prompt_text: str, db):
         # Close scraper
         loop.run_until_complete(scraper.close())
         
+        # Update session status to completed
+        db.sessions.update_one(
+            {"prompt_id": prompt_id, "stage": "scraping"},
+            {"$set": {"status": "completed"}, "$push": {"log": f"Scraped {len(pins)} pins"}}
+        )
+        
+        # Create session for validation stage
+        validation_session = SessionCreate(
+            prompt_id=prompt_id,
+            stage="validation",
+            status="pending",
+            log=["Starting image validation phase"]
+        )
+        session_dict = validation_session.model_dump()
+        db.sessions.insert_one(session_dict)
+        
         # Evaluate images
         evaluator = ImageEvaluator()
         for pin in pins:
@@ -43,61 +82,149 @@ def process_prompt_background(prompt_id: UUID, prompt_text: str, db):
                 evaluator.evaluate_image_match(prompt_text, pin.get("description", ""))
             )
             
-            # Save image to database
-            db.images.insert_one({
-                "prompt_id": str(prompt_id),
-                "pin_id": pin.get("pin_id"),
+            ai_explanation = loop.run_until_complete(
+                evaluator.generate_explanation(prompt_text, pin.get("description", ""), match_score)
+            )
+            
+            # Save pin to database
+            pin_data = {
+                "prompt_id": prompt_id,
                 "image_url": pin.get("image_url"),
-                "source_url": pin.get("source_url"),
-                "description": pin.get("description"),
+                "pin_url": pin.get("source_url", ""),  # Using source_url as pin_url
+                "title": pin.get("title", ""),
+                "description": pin.get("description", ""),
                 "match_score": match_score,
-                "approved": None
-            })
+                "status": "approved" if match_score >= 0.7 else "disqualified",
+                "ai_explanation": ai_explanation,
+                "metadata": {"collected_at": pin.get("collected_at", None)}
+            }
+            db.pins.insert_one(pin_data)
         
-        # Update status to completed
+        # Update session status to completed
+        db.sessions.update_one(
+            {"prompt_id": prompt_id, "stage": "validation"},
+            {"$set": {"status": "completed"}, "$push": {"log": "Completed validation phase"}}
+        )
+        
+        # Update prompt status to completed
         db.prompts.update_one(
-            {"id": str(prompt_id)},
+            {"_id": prompt_id},
             {"$set": {"status": "completed"}}
         )
-    except Exception as e:
-        # Update status to failed
-        db.prompts.update_one(
-            {"id": str(prompt_id)},
-            {"$set": {"status": "failed", "error": str(e)}}
+    except pymongo.errors.PyMongoError as e:
+        # Update current session to failed
+        db.sessions.update_one(
+            {"prompt_id": prompt_id, "status": "pending"},
+            {"$set": {"status": "failed"}, "$push": {"log": f"Database error: {str(e)}"}}
         )
+        
+        # Update prompt status to error
+        db.prompts.update_one(
+            {"_id": prompt_id},
+            {"$set": {"status": "error"}}
+        )
+        print(f"Database error: {str(e)}")
+    except ValueError as e:
+        # Update current session to failed
+        db.sessions.update_one(
+            {"prompt_id": prompt_id, "status": "pending"},
+            {"$set": {"status": "failed"}, "$push": {"log": f"Value error: {str(e)}"}}
+        )
+        
+        # Update prompt status to error
+        db.prompts.update_one(
+            {"_id": prompt_id},
+            {"$set": {"status": "error"}}
+        )
+        print(f"Value error: {str(e)}")
+    except Exception as e:
+        # Update current session to failed
+        db.sessions.update_one(
+            {"prompt_id": prompt_id, "status": "pending"},
+            {"$set": {"status": "failed"}, "$push": {"log": f"Unexpected error: {str(e)}"}}
+        )
+        
+        # Update prompt status to error
+        db.prompts.update_one(
+            {"_id": prompt_id},
+            {"$set": {"status": "error"}}
+        )
+        print(f"Unexpected error: {str(e)}")
     finally:
         loop.close()
 
 @router.post("/", response_model=Prompt)
 def create_prompt(
     prompt: PromptCreate,
-    background_tasks: BackgroundTasks,
     db = Depends(get_database)
 ):
-    prompt_dict = prompt.model_dump()
-    new_prompt = Prompt(**prompt_dict)
-    
-    # Insert prompt into database
-    db.prompts.insert_one(new_prompt.model_dump())
-    
-    # Process prompt in background
-    thread = threading.Thread(
-        target=process_prompt_background,
-        args=(new_prompt.id, new_prompt.visual_prompt, db)
-    )
-    thread.daemon = True
-    thread.start()
-    
-    return new_prompt
+    try:
+        prompt_dict = prompt.model_dump()
+        new_prompt = Prompt(**prompt_dict)
+        
+        # Insert prompt into database
+        result = db.prompts.insert_one(new_prompt.model_dump(by_alias=True))
+        prompt_id = result.inserted_id
+        
+        # Process prompt in background
+        thread = threading.Thread(
+            target=process_prompt_background,
+            args=(prompt_id, new_prompt.text, db)
+        )
+        thread.daemon = True
+        thread.start()
+        
+        # Retrieve the inserted prompt
+        created_prompt = db.prompts.find_one({"_id": prompt_id})
+        return Prompt(**created_prompt)
+    except pymongo.errors.PyMongoError as e:
+        # Update prompt status to error if ID exists
+        if "prompt_dict" in locals() and "_id" in prompt_dict:
+            db.prompts.update_one(
+                {"_id": prompt_dict["_id"]},
+                {"$set": {"status": "error"}}
+            )
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}") from e
+    except ValueError as e:
+        # Update prompt status to error if ID exists
+        if "prompt_dict" in locals() and "_id" in prompt_dict:
+            db.prompts.update_one(
+                {"_id": prompt_dict["_id"]},
+                {"$set": {"status": "error"}}
+            )
+        raise HTTPException(status_code=400, detail=f"Value error: {str(e)}") from e
+    except Exception as e:
+        # Update prompt status to error if ID exists
+        if "prompt_dict" in locals() and "_id" in prompt_dict:
+            db.prompts.update_one(
+                {"_id": prompt_dict["_id"]},
+                {"$set": {"status": "error"}}
+            )
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}") from e
 
 @router.get("/", response_model=List[Prompt])
 def get_prompts(db = Depends(get_database)):
-    prompts = list(db.prompts.find())
-    return [Prompt(**prompt) for prompt in prompts]
+    try:
+        prompts = list(db.prompts.find())
+        return [Prompt(**prompt) for prompt in prompts]
+    except pymongo.errors.PyMongoError as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}") from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}") from e
 
 @router.get("/{prompt_id}", response_model=Prompt)
-def get_prompt(prompt_id: UUID, db = Depends(get_database)):
-    prompt = db.prompts.find_one({"id": str(prompt_id)})
-    if not prompt:
-        raise HTTPException(status_code=404, detail="Prompt not found")
-    return Prompt(**prompt)
+def get_prompt(prompt_id: str, db = Depends(get_database)):
+    try:
+        prompt_id = ObjectId(prompt_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid prompt ID format") from exc
+    
+    try:
+        prompt = db.prompts.find_one({"_id": prompt_id})
+        if not prompt:
+            raise HTTPException(status_code=404, detail="Prompt not found")
+        return Prompt(**prompt)
+    except pymongo.errors.PyMongoError as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}") from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}") from e

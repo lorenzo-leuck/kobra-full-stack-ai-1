@@ -62,11 +62,41 @@ The backend for the AI-powered Pinterest scraper system uses FastAPI, Pydantic, 
 
 **FastAPI + Python**: Backend framework chosen for high performance, easy-to-use async capabilities, automatic OpenAPI documentation, and type checking with Pydantic.
 
-**MongoDB with pymongo**: Synchronous MongoDB client for storing prompt sessions, scraped images, and evaluation results. Replaced deprecated Motor library with direct pymongo integration.
+**MongoDB with pymongo**: Synchronous MongoDB client for storing prompts, sessions, and pins in dedicated collections with specific schemas. Uses MongoDB ObjectId for document references and relationship management.
 
 **Playwright**: Headless browser automation for Pinterest scraping, simulating user behavior to align with visual prompts.
 
 **OpenAI API**: Used for evaluating image relevance to the original prompt with AI-powered scoring.
+
+### MongoDB Collections
+
+The application uses three MongoDB collections with the following schemas:
+
+1. **prompts**:
+   - `_id`: ObjectId - Unique identifier
+   - `text`: string - The visual prompt text
+   - `created_at`: ISODate - When the prompt was created
+   - `status`: enum("pending", "completed", "error") - Current status
+
+2. **sessions**:
+   - `_id`: ObjectId - Unique identifier
+   - `prompt_id`: ObjectId - Reference to the prompt
+   - `stage`: enum("warmup", "scraping", "validation") - Processing stage
+   - `status`: enum("pending", "completed", "failed") - Current status
+   - `timestamp`: ISODate - When the session was created/updated
+   - `log`: array of strings - Processing logs
+
+3. **pins**:
+   - `_id`: ObjectId - Unique identifier
+   - `prompt_id`: ObjectId - Reference to the prompt
+   - `image_url`: string - URL to the image
+   - `pin_url`: string - URL to the Pinterest pin
+   - `title`: string - Pin title
+   - `description`: string - Pin description
+   - `match_score`: number - AI-evaluated relevance score
+   - `status`: enum("approved", "disqualified") - Approval status
+   - `ai_explanation`: string - AI-generated explanation of match score
+   - `metadata`: object - Contains `collected_at` timestamp
 
 ### Folder Structure
 
@@ -79,27 +109,31 @@ backend/
 │   ├── database.py          # MongoDB connection
 │   ├── models/              # Pydantic models
 │   │   ├── __init__.py
-│   │   ├── prompt.py
-│   │   └── image.py
+│   │   ├── prompt.py        # Prompt model with MongoDB ObjectId
+│   │   ├── session.py       # New Session model for tracking processing stages
+│   │   └── image.py         # Renamed to Pin model with expanded fields
 │   ├── routers/             # API endpoints
 │   │   ├── __init__.py
-│   │   ├── prompts.py
-│   │   └── images.py
+│   │   ├── prompts.py       # Updated for MongoDB ObjectId and session tracking
+│   │   ├── sessions.py      # New router for session management
+│   │   └── images.py        # Renamed to pins router with filtering capabilities
 │   └── services/            # Business logic
 │       ├── __init__.py
 │       ├── pinterest_scraper.py
-│       └── image_evaluator.py
+│       └── image_evaluator.py # Added AI explanation generation
 ├── requirements.txt         # Project dependencies
 └── .env.example             # Example environment variables
 ```
 
 ### API Endpoints
 
-- `POST /api/v1/prompts` - Create a new visual prompt
-- `GET /api/v1/prompts` - List all prompts
-- `GET /api/v1/prompts/{prompt_id}` - Get a specific prompt
-- `GET /api/v1/images/prompt/{prompt_id}` - Get images for a specific prompt
-- `PUT /api/v1/images/{image_id}/approve` - Approve or reject an image
+- `POST /api/prompts` - Create a new visual prompt
+- `GET /api/prompts` - List all prompts
+- `GET /api/prompts/{prompt_id}` - Get a specific prompt
+- `GET /api/pins/prompt/{prompt_id}` - Get pins for a specific prompt with optional filtering
+- `PUT /api/pins/{pin_id}/status` - Update pin status (approved/disqualified)
+- `GET /api/sessions/prompt/{prompt_id}` - Get processing sessions for a prompt
+- `GET /api/sessions/{session_id}` - Get a specific processing session
 
 ## Frontend
 
@@ -140,6 +174,8 @@ frontend/
 * 0.1 - First commit
 * 0.2 - Frontend setup
 * 0.3 - Backend setup
+* 0.4 - Docker compose setup
+* 0.5 - MongoDB schema implementation with collections for prompts, sessions, and pins
 
 
 # License

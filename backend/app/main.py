@@ -1,7 +1,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI(title="AI Pinterest Scraper")
+app = FastAPI(
+    title="AI Pinterest Scraper",
+    version="1.0.0",
+    description="AI-powered Pinterest scraper and image evaluator"
+)
 
 # Configure CORS
 app.add_middleware(
@@ -19,9 +23,10 @@ def root():
 
 
 # Import and include routers
-from app.routers import prompts, images
-app.include_router(prompts.router, prefix="/api/v1")
-app.include_router(images.router, prefix="/api/v1")
+from app.routers import prompts, images, sessions
+app.include_router(prompts.router, prefix="/api")
+app.include_router(images.router, prefix="/api")  # Router prefix is /pins but file is still named images.py
+app.include_router(sessions.router, prefix="/api")
 
 if __name__ == "__main__":
     import uvicorn
