@@ -6,11 +6,51 @@ AI-driven platform for fetching, evaluating, and displaying images that match us
 
 ## Requirements
 
-## Run App
+- Docker and Docker Compose
+- Node.js 18+ (for local development)
+- Python 3.11+ (for local development)
+- MongoDB instance (local or cloud)
+- OpenAI API key
 
-## Run Tests
+## Docker Setup
 
-# Deployment
+The project is containerized using Docker with separate services for the frontend and backend:
+
+1. **Backend (FastAPI)**: Runs on port 8000, includes Google Chrome for Playwright
+2. **Frontend (React + Vite)**: Served via Node.js on port 3000
+
+### Environment Variables
+
+Create a `.env` file in the project root with:
+
+```
+OPENAI_API_KEY=your_openai_api_key
+MONGODB_URI=your_mongodb_connection_string
+```
+
+### Run with Docker
+
+```bash
+docker-compose up --build
+```
+
+Access the application at http://localhost:3000
+
+## Run App Locally
+
+### Backend
+```bash
+cd backend
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+```
+
+### Frontend
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
 # Docs
 

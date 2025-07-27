@@ -13,6 +13,7 @@
     "verbatimModuleSyntax": true,
     "isolatedModules": true,
     "jsx": "react-jsx",
+    "noEmit": true,
 
     /* Linting */
     "strict": true,
