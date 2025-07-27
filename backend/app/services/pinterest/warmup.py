@@ -6,16 +6,19 @@ class PinterestWarmup(PinterestSession):
         super().__init__(username, password)
         self.prompt = prompt
     
-    async def feed_algorithm(self, num_clicks=3):
+    async def feed_algorithm(self, num_clicks=None):
         """
-        Minimal warm-up: search for prompt, scroll once, click X pins
+        Fixed warm-up: search for prompt, click 5 pins and react to them
         """
         if not self.page:
             print("Session not initialized. Call initialize_browser() first.")
             return False
         
+        # Always do exactly 5 warmup clicks
+        warmup_clicks = 5
+        
         try:
-            print(f"Starting warm-up for prompt: '{self.prompt}' - will click {num_clicks} pins")
+            print(f"Starting warm-up for prompt: '{self.prompt}' - will click {warmup_clicks} pins")
             
             # Search for the target prompt
             search_url = f"https://www.pinterest.com/search/pins/?q={self.prompt.replace(' ', '+')}"
@@ -28,10 +31,10 @@ class PinterestWarmup(PinterestSession):
             
             clicks_made = 0
             
-            # Simple approach: just scroll and hover over pins to simulate engagement
-            for i in range(num_clicks):
+            # Fixed 5 pin interactions
+            for i in range(warmup_clicks):
                 try:
-                    print(f"Engaging with pin {i + 1}/{num_clicks}...")
+                    print(f"Engaging with pin {i + 1}/{warmup_clicks}...")
                     
                     # Get pins
                     pins = await self.page.query_selector_all('div[data-test-id="pinWrapper"]')
@@ -56,13 +59,41 @@ class PinterestWarmup(PinterestSession):
                         await img.click()
                         await asyncio.sleep(2)
                         
-                        # Check if we navigated
+                        # Check if we navigated to pin page
                         current_url = self.page.url
-                        if "/pin/" in current_url or current_url != search_url:
-                            print(f"Successfully viewed pin {i + 1}")
+                        if "/pin/" in current_url:
+                            print(f"Successfully viewed pin {i + 1}, now reacting...")
+                            
+                            # Try to click the heart/react button
+                            try:
+                                # Try multiple selectors for the react button
+                                react_selectors = [
+                                    'button[data-test-id="react-button"]',
+                                    'button[aria-label="React"]',
+                                    'button.yfm.adn.obZ.lnZ.wsz'
+                                ]
+                                
+                                reacted = False
+                                for selector in react_selectors:
+                                    try:
+                                        await self.page.click(selector, timeout=2000)
+                                        print(f"❤️ Reacted to pin {i + 1}")
+                                        reacted = True
+                                        break
+                                    except:
+                                        continue
+                                
+                                if not reacted:
+                                    print(f"Couldn't find react button for pin {i + 1}")
+                                
+                                await asyncio.sleep(1)
+                                
+                            except Exception as e:
+                                print(f"Error reacting to pin {i + 1}: {e}")
+                            
                             clicks_made += 1
                             await self.page.go_back()
-                            await asyncio.sleep(1)
+                            await asyncio.sleep(2)
                         else:
                             print(f"Hover engagement on pin {i + 1}")
                             clicks_made += 1
@@ -79,7 +110,7 @@ class PinterestWarmup(PinterestSession):
                     clicks_made += 1
                     await asyncio.sleep(1)
             
-            print(f"Warm-up completed: clicked {clicks_made}/{num_clicks} pins")
+            print(f"Warm-up completed: engaged with {clicks_made}/{warmup_clicks} pins")
             return clicks_made > 0
             
         except Exception as e:
