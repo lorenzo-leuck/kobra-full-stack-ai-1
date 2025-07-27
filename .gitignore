@@ -1,0 +1,7 @@
+node_modules
+.env
+.vscode
+venv
+build
+dist
+out
