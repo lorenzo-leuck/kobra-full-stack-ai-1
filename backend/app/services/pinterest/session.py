@@ -15,9 +15,81 @@ class PinterestSession:
         print(f"Logging in with username: {self.username}")
         print(f"Password: {'*' * len(self.password) if self.password else 'Not provided'}")
         
-        # This is just a placeholder for now
-        # The actual login implementation will be added later
-        return True
+        if not self.page:
+            print("Browser not initialized. Call initialize_browser() first.")
+            return False
+            
+        try:
+            # Navigate to Pinterest login page
+            print("Navigating to Pinterest login page...")
+            await self.page.goto("https://www.pinterest.com/login/", timeout=30000)
+            await asyncio.sleep(3)
+            
+            # Wait for login form to load
+            await self.page.wait_for_selector('input[id="email"]', timeout=10000)
+            
+            # Fill in email
+            print("Entering email...")
+            await self.page.fill('input[id="email"]', self.username)
+            await asyncio.sleep(1)
+            
+            # Fill in password
+            print("Entering password...")
+            await self.page.fill('input[id="password"]', self.password)
+            await asyncio.sleep(1)
+            
+            # Click login button - try multiple selectors
+            print("Clicking login button...")
+            login_clicked = False
+            
+            # Try different possible selectors for the login button
+            selectors_to_try = [
+                'div:has-text("Log in")',  # Based on your inspection
+                'button:has-text("Log in")',
+                'div.B1n.tg7.fxm.dyH.xl9.stq:has-text("Log in")',  # Exact classes you found
+                '[data-test-id="registerFormSubmitButton"]',
+                'button[type="submit"]',
+                'form button'
+            ]
+            
+            for selector in selectors_to_try:
+                try:
+                    print(f"Trying selector: {selector}")
+                    await self.page.click(selector, timeout=5000)
+                    login_clicked = True
+                    print(f"Successfully clicked login button with selector: {selector}")
+                    break
+                except:
+                    continue
+            
+            if not login_clicked:
+                print("Could not find login button with any selector")
+                return False
+            
+            # Wait for navigation or error
+            await asyncio.sleep(5)
+            
+            # Check if login was successful by looking for the home page elements
+            current_url = self.page.url
+            print(f"Current URL after login: {current_url}")
+            
+            # If we're redirected to home page, login was successful
+            if "pinterest.com" in current_url and "/login" not in current_url:
+                print("Login appears successful!")
+                return True
+            else:
+                # Check for error messages
+                error_elements = await self.page.query_selector_all('[data-test-id="error-message"]')
+                if error_elements:
+                    error_text = await error_elements[0].inner_text()
+                    print(f"Login error: {error_text}")
+                else:
+                    print("Login may have failed - still on login page")
+                return False
+                
+        except Exception as e:
+            print(f"Error during login: {e}")
+            return False
     
     async def initialize_browser(self, headless=True):
         """
@@ -60,7 +132,14 @@ class PinterestSession:
         try:
             print("Navigating to Pinterest feed...")
             await self.page.goto("https://www.pinterest.com/", timeout=30000)
-            await asyncio.sleep(3)
+            await asyncio.sleep(5)
+            
+            # Wait for the feed to load
+            print("Waiting for feed to load...")
+            try:
+                await self.page.wait_for_selector('div[data-test-id="pinWrapper"]', timeout=15000)
+            except:
+                print("Feed elements not found immediately, continuing anyway...")
             
             img_urls = set()
             scroll_attempts = 0
