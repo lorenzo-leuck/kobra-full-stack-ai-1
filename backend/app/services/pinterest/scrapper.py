@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-
-import argparse
 import urllib.request
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
@@ -44,7 +41,7 @@ async def get_image_urls(url, num_images=10, scroll_attempts_limit=10, headless=
         try:
             print(f"Navigating to search URL: {url}")
             await page.goto(url, timeout=30000)
-            await asyncio.sleep(2)  # Give page time to load
+            await asyncio.sleep(2)
             
             img_urls = set()
             scroll_attempts = 0
@@ -52,19 +49,15 @@ async def get_image_urls(url, num_images=10, scroll_attempts_limit=10, headless=
             while len(img_urls) < num_images and scroll_attempts < scroll_attempts_limit:
                 print(f"Scroll attempt {scroll_attempts+1}/{scroll_attempts_limit}")
                 
-                # Try to find pin wrappers
                 pins = await page.query_selector_all("div[data-test-id='pinWrapper']")
                 print(f"Found {len(pins)} pins")
                 
                 for pin in pins:
                     try:
-                        # Get the image element within the pin
                         image_element = await pin.query_selector("img")
                         if image_element:
-                            # Try to get srcset first for higher quality
                             srcset = await image_element.get_attribute("srcset")
                             if srcset:
-                                # Parse srcset to get highest resolution image
                                 highest_res_url = None
                                 highest_res = 0
                                 for part in srcset.split(","):
@@ -85,10 +78,8 @@ async def get_image_urls(url, num_images=10, scroll_attempts_limit=10, headless=
                                 if highest_res_url and highest_res_url.startswith("http"):
                                     img_urls.add(highest_res_url)
                             else:
-                                # Fallback to src attribute
                                 src = await image_element.get_attribute("src")
                                 if src and src.startswith("http"):
-                                    # Try to get higher resolution version
                                     if "236x" in src:
                                         src = src.replace("236x", "736x")
                                     elif "474x" in src:
@@ -104,9 +95,8 @@ async def get_image_urls(url, num_images=10, scroll_attempts_limit=10, headless=
                 if len(img_urls) >= num_images:
                     break
                     
-                # Scroll down to load more pins
                 await page.evaluate("window.scrollBy(0, 1000)")
-                await asyncio.sleep(2)  # Wait for new content to load
+                await asyncio.sleep(2)
                 scroll_attempts += 1
                 print(f"Found {len(img_urls)} images so far")
                 
@@ -117,43 +107,37 @@ async def get_image_urls(url, num_images=10, scroll_attempts_limit=10, headless=
             
         return list(img_urls)[:num_images]
 
-        browser.close()
-        return list(img_urls)[:num_images]
-
-def parse_args():
-    parser = argparse.ArgumentParser(description="Pinterest Search Image Scraper")
-    parser.add_argument("search_query", type=str, help="Search terms for Pinterest (e.g., 'modern kitchen design')")
-    parser.add_argument("num_images", type=int, help="Number of images to download")
-    parser.add_argument("--headless", action="store_true", help="Run headless (without GUI)")
-    parser.add_argument("--output-name", type=str, help="Custom name for output folder (default: uses search query)")
-    parser.add_argument("--use-explore", action="store_true", help="Use Pinterest explore URL format")
-    return parser.parse_args()
-
-async def main_async():
-    args = parse_args()
+async def scrape_pinterest_images(search_query: str, num_images: int = 10, headless: bool = True, download: bool = False, output_name: str = None):
+    """
+    Main function to scrape Pinterest images for a given search query.
     
-    search_terms = args.search_query.replace(" ", "+")
+    Args:
+        search_query: The search terms for Pinterest
+        num_images: Number of images to scrape
+        headless: Whether to run browser in headless mode
+        download: Whether to download the images locally
+        output_name: Custom name for output folder (optional)
     
-    # Use the explore URL format which seems to work better
+    Returns:
+        List of image URLs
+    """
+    search_terms = search_query.replace(" ", "+")
     pinterest_url = f"https://www.pinterest.com/search/pins/?q={search_terms}&rs=typed"
     
-    print(f"Searching Pinterest for: {args.search_query}")
+    print(f"Searching Pinterest for: {search_query}")
     print(f"URL: {pinterest_url}")
-    print(f"Running in {'headless' if args.headless else 'visible'} mode")
+    print(f"Running in {'headless' if headless else 'visible'} mode")
 
-    img_urls = await get_image_urls(pinterest_url, num_images=args.num_images, headless=args.headless)
+    img_urls = await get_image_urls(pinterest_url, num_images=num_images, headless=headless)
     if not img_urls:
         print("No images found. Please try a different search query or run without --headless to debug.")
-        return
+        return []
 
     print(f"\nNumber of images found: {len(img_urls)}")
     
-    output_name = args.output_name if args.output_name else args.search_query.replace(" ", "_")
-    download_images(img_urls, output_name)
-    print("\nThe image download has finished.")
-
-def main():
-    asyncio.run(main_async())
-
-if __name__ == "__main__":
-    main()
+    if download:
+        folder_name = output_name if output_name else search_query.replace(" ", "_")
+        download_images(img_urls, folder_name)
+        print("\nThe image download has finished.")
+    
+    return img_urls
