@@ -49,9 +49,9 @@ async def main_async():
             
         print("Login successful")
         
-        # Feed algorithm (warm-up)
+        # Feed algorithm (warm-up) - click same number of pins as images to download
         print("\n=== WARM-UP PHASE ===")
-        warmup_success = await warmup.feed_algorithm()
+        warmup_success = await warmup.feed_algorithm(num_clicks=args.num_images)
         
         if not warmup_success:
             print("Warm-up failed, but continuing with scraping...")
