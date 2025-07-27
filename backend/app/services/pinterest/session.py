@@ -147,34 +147,75 @@ class PinterestSession:
             except:
                 print("Feed elements not found immediately, continuing anyway...")
             
-            img_urls = set()
+            img_urls = []  # Use list to preserve order
             scroll_attempts = 0
             
             while len(img_urls) < num_images and scroll_attempts < scroll_attempts_limit:
-                print(f"Scroll attempt {scroll_attempts+1}/{scroll_attempts_limit}")
+                print(f"Collecting images: {len(img_urls)}/{num_images}")
                 
                 # Find pin wrappers in the feed
                 pins = await self.page.query_selector_all("div[data-test-id='pinWrapper']")
                 print(f"Found {len(pins)} pins in feed")
                 
-                # Use helper function to extract URLs
-                new_urls = await extract_image_urls_from_pins(pins)
-                img_urls.update(new_urls)
+                # Extract URLs from pins in order, avoiding duplicates
+                for pin in pins:
+                    if len(img_urls) >= num_images:
+                        break
+                        
+                    try:
+                        image_element = await pin.query_selector("img")
+                        if image_element:
+                            # Try to get srcset first for higher quality
+                            srcset = await image_element.get_attribute("srcset")
+                            if srcset:
+                                highest_res_url = None
+                                highest_res = 0
+                                for part in srcset.split(","):
+                                    part = part.strip()
+                                    if not part:
+                                        continue
+                                    parts = part.split(" ")
+                                    if len(parts) >= 2:
+                                        url = parts[0]
+                                        try:
+                                            res = int(parts[1].replace("x", ""))
+                                            if res > highest_res:
+                                                highest_res = res
+                                                highest_res_url = url
+                                        except ValueError:
+                                            pass
+                                            
+                                if highest_res_url and highest_res_url.startswith("http") and highest_res_url not in img_urls:
+                                    img_urls.append(highest_res_url)
+                            else:
+                                # Fallback to src attribute
+                                src = await image_element.get_attribute("src")
+                                if src and src.startswith("http"):
+                                    # Try to get higher resolution version
+                                    if "236x" in src:
+                                        src = src.replace("236x", "736x")
+                                    elif "474x" in src:
+                                        src = src.replace("474x", "736x")
+                                    if src not in img_urls:
+                                        img_urls.append(src)
+                    except Exception as e:
+                        print(f"Error processing pin: {e}")
+                        continue
                 
                 if len(img_urls) >= num_images:
                     break
                     
-                # Scroll down to load more pins
+                # Only scroll if we need more images
+                print(f"Found {len(img_urls)} images so far, scrolling for more...")
                 await self.page.evaluate("window.scrollBy(0, 1000)")
                 await asyncio.sleep(2)
                 scroll_attempts += 1
-                print(f"Found {len(img_urls)} images so far")
                 
         except Exception as e:
             print(f"Error during feed scraping: {e}")
             return []
         
-        img_urls_list = list(img_urls)[:num_images]
+        img_urls_list = img_urls[:num_images]  # Already a list, just slice
         print(f"\nTotal images found in feed: {len(img_urls_list)}")
         
         if download and img_urls_list:
