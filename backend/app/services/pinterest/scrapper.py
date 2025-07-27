@@ -29,6 +29,60 @@ def download_images(img_urls, name_img):
         for future in futures:
             future.result()
 
+async def extract_image_urls_from_pins(pins):
+    """
+    Helper function to extract image URLs from Pinterest pin elements.
+    
+    Args:
+        pins: List of pin elements from page.query_selector_all
+    
+    Returns:
+        Set of image URLs
+    """
+    img_urls = set()
+    
+    for pin in pins:
+        try:
+            image_element = await pin.query_selector("img")
+            if image_element:
+                # Try to get srcset first for higher quality
+                srcset = await image_element.get_attribute("srcset")
+                if srcset:
+                    highest_res_url = None
+                    highest_res = 0
+                    for part in srcset.split(","):
+                        part = part.strip()
+                        if not part:
+                            continue
+                        parts = part.split(" ")
+                        if len(parts) >= 2:
+                            url = parts[0]
+                            try:
+                                res = int(parts[1].replace("x", ""))
+                                if res > highest_res:
+                                    highest_res = res
+                                    highest_res_url = url
+                            except ValueError:
+                                pass
+                                
+                    if highest_res_url and highest_res_url.startswith("http"):
+                        img_urls.add(highest_res_url)
+                else:
+                    # Fallback to src attribute
+                    src = await image_element.get_attribute("src")
+                    if src and src.startswith("http"):
+                        # Try to get higher resolution version
+                        if "236x" in src:
+                            src = src.replace("236x", "736x")
+                        elif "474x" in src:
+                            src = src.replace("474x", "736x")
+                        img_urls.add(src)
+        except Exception as e:
+            print(f"Error processing pin: {e}")
+            continue
+    
+    return img_urls
+
 async def get_image_urls(url, num_images=10, scroll_attempts_limit=10, headless=True):
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=headless)
@@ -52,45 +106,9 @@ async def get_image_urls(url, num_images=10, scroll_attempts_limit=10, headless=
                 pins = await page.query_selector_all("div[data-test-id='pinWrapper']")
                 print(f"Found {len(pins)} pins")
                 
-                for pin in pins:
-                    try:
-                        image_element = await pin.query_selector("img")
-                        if image_element:
-                            srcset = await image_element.get_attribute("srcset")
-                            if srcset:
-                                highest_res_url = None
-                                highest_res = 0
-                                for part in srcset.split(","):
-                                    part = part.strip()
-                                    if not part:
-                                        continue
-                                    parts = part.split(" ")
-                                    if len(parts) >= 2:
-                                        url = parts[0]
-                                        try:
-                                            res = int(parts[1].replace("x", ""))
-                                            if res > highest_res:
-                                                highest_res = res
-                                                highest_res_url = url
-                                        except ValueError:
-                                            pass
-                                            
-                                if highest_res_url and highest_res_url.startswith("http"):
-                                    img_urls.add(highest_res_url)
-                            else:
-                                src = await image_element.get_attribute("src")
-                                if src and src.startswith("http"):
-                                    if "236x" in src:
-                                        src = src.replace("236x", "736x")
-                                    elif "474x" in src:
-                                        src = src.replace("474x", "736x")
-                                    img_urls.add(src)
-                    except Exception as e:
-                        print(f"Error processing pin: {e}")
-                        continue
-                        
-                    if len(img_urls) >= num_images:
-                        break
+                # Use helper function to extract URLs
+                new_urls = await extract_image_urls_from_pins(pins)
+                img_urls.update(new_urls)
                 
                 if len(img_urls) >= num_images:
                     break
