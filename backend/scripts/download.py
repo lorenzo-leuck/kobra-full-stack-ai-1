@@ -7,12 +7,17 @@ This is for testing purposes only - the main app uses URLs directly.
 import json
 import argparse
 import sys
+import urllib.request
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 
-# Add parent directory to path to import services
-sys.path.append(str(Path(__file__).parent.parent))
-from app.services.pinterest.scrapper import download_image
+def download_image(img_url, output_path):
+    """Download image from URL to specified path"""
+    try:
+        urllib.request.urlretrieve(img_url, output_path)
+        print(f"Downloaded: {output_path.name}", end="\r")
+    except Exception as e:
+        print(f"Error Downloading {output_path.name}: {e}")
 
 def export_pins_to_json(pin_data, prompt_name, output_dir=None):
     """
