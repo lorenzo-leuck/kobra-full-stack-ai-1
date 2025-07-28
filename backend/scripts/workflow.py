@@ -21,7 +21,7 @@ from download import export_pins_to_json, download_from_json
 load_dotenv()
 
 # Configuration
-PINTEREST_PROMPT = "futurama"
+PINTEREST_PROMPT = "he-man"
 NUM_IMAGES = 20
 
 async def run_complete_workflow():

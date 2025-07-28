@@ -4,9 +4,10 @@ from pydantic import BaseModel, Field
 from pydantic_ai import Agent, ImageUrl
 from pydantic_ai.models.openai import OpenAIModel
 from pydantic_ai.providers.openai import OpenAIProvider
+from pydantic_ai.settings import ModelSettings
 
 from app.config import settings
-from app.database import PromptDB, PinDB
+from app.database import PromptDB, PinDB, AgentDB
 
 
 class PinValidation(BaseModel):
@@ -20,34 +21,28 @@ class AIEvaluator:
         if not settings.OPENAI_API_KEY:
             raise ValueError("OPENAI_API_KEY is required for AI evaluation")
         
+        # Load agent configuration from database
+        agent_config = AgentDB.get_agent_by_title("pin-evaluator")
+        if not agent_config:
+            raise ValueError("Agent configuration 'pin-evaluator' not found in database. Please run database setup.")
+        
         # Create OpenAI provider with API key
         provider = OpenAIProvider(api_key=settings.OPENAI_API_KEY)
-        self.model = OpenAIModel('gpt-4o', provider=provider)
+        self.model = OpenAIModel(agent_config["model"], provider=provider)
+        
+        # Store user prompt template for later use
+        self.user_prompt_template = agent_config["user_prompt_template"]
+        
+        # Configure model settings with temperature from database
+        model_settings = ModelSettings(
+            temperature=agent_config.get("temperature", 0.7)  # Default to 0.7 if not set
+        )
         
         self.agent = Agent(
             model=self.model,
             result_type=PinValidation,
-            system_prompt="""You are an expert at evaluating how well Pinterest images match visual prompts.
-
-Your task is to analyze both the visual content of an image AND its textual metadata (title, description) to determine how well they collectively match the given prompt.
-
-Scoring guidelines:
-- 0.8-1.0: Excellent match - image and text perfectly capture the prompt's style, mood, and elements
-- 0.6-0.79: Good match - image and text capture most key aspects of the prompt
-- 0.4-0.59: Partial match - image and text capture some elements but missing key aspects
-- 0.2-0.39: Poor match - image and text have minimal connection to the prompt
-- 0.0-0.19: No match - image and text don't relate to the prompt at all
-
-Evaluation criteria:
-- Visual elements: style, mood, colors, composition, objects, setting
-- Textual relevance: how well title and description align with the prompt
-- Combined coherence: how well visual and textual elements work together
-
-Status rules:
-- "approved" if match_score ≥ 0.5
-- "disqualified" if match_score < 0.5
-
-Provide a clear 2-3 sentence explanation focusing on both visual and textual elements that support your score."""
+            system_prompt=agent_config["system_prompt"],
+            model_settings=model_settings
         )
     
     async def evaluate_pin(self, prompt_text: str, image_url: str, title: str = None, description: str = None) -> PinValidation:
@@ -58,13 +53,11 @@ Provide a clear 2-3 sentence explanation focusing on both visual and textual ele
         if description:
             textual_context += f"\nPin Description: {description}"
         
-        # Create message with both image and text for multimodal analysis
-        evaluation_prompt = f"""
-Evaluate how well this image matches the prompt: "{prompt_text}"
-{textual_context}
-
-Analyze both the visual elements (style, mood, aesthetic) and the textual context (title, description) to determine the match quality. Consider how well the combination of visual and textual information aligns with the requested prompt.
-"""
+        # Use the user prompt template from database configuration
+        evaluation_prompt = self.user_prompt_template.format(
+            prompt_text=prompt_text,
+            textual_context=textual_context
+        )
         
         # Send both the image and text for proper multimodal analysis
         messages = [
