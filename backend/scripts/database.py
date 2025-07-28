@@ -10,10 +10,10 @@ from pathlib import Path
 
 # Add app directory to path for imports
 sys.path.append(str(Path(__file__).parent.parent))
-from app.database import PromptDB, SessionDB, PinDB, AgentDB
+from app.database import PromptDB, SessionDB, PinDB, AgentDB, StatusDB
 
 def clear_database():
-    """Clear all data from pins, sessions, and prompts collections"""
+    """Clear all data from pins, sessions, prompts, and status collections"""
     
     print("🗑️  Clearing database collections...")
     print("=" * 50)
@@ -22,13 +22,15 @@ def clear_database():
     pins_count = len(PinDB.get_many())
     sessions_count = len(SessionDB.get_many())
     prompts_count = len(PromptDB.get_many())
+    status_count = len(StatusDB.get_many())
     
     print(f"Before deletion:")
     print(f"  Pins: {pins_count}")
     print(f"  Sessions: {sessions_count}")
     print(f"  Prompts: {prompts_count}")
+    print(f"  Status: {status_count}")
     
-    if pins_count == 0 and sessions_count == 0 and prompts_count == 0:
+    if pins_count == 0 and sessions_count == 0 and prompts_count == 0 and status_count == 0:
         print("\n✅ Database is already empty!")
         return
     
@@ -52,17 +54,24 @@ def clear_database():
     prompts_result = prompts_collection.delete_many({})
     print(f"  Deleted {prompts_result.deleted_count} prompts")
     
+    # Delete status
+    status_collection = StatusDB.get_collection()
+    status_result = status_collection.delete_many({})
+    print(f"  Deleted {status_result.deleted_count} status documents")
+    
     # Verify deletion
     remaining_pins = len(PinDB.get_many())
     remaining_sessions = len(SessionDB.get_many())
     remaining_prompts = len(PromptDB.get_many())
+    remaining_status = len(StatusDB.get_many())
     
     print(f"\nAfter deletion:")
     print(f"  Pins: {remaining_pins}")
     print(f"  Sessions: {remaining_sessions}")
     print(f"  Prompts: {remaining_prompts}")
+    print(f"  Status: {remaining_status}")
     
-    if remaining_pins == 0 and remaining_sessions == 0 and remaining_prompts == 0:
+    if remaining_pins == 0 and remaining_sessions == 0 and remaining_prompts == 0 and remaining_status == 0:
         print("\n✅ Database cleared successfully!")
     else:
         print("\n⚠️  Some documents may not have been deleted")
@@ -77,11 +86,13 @@ def show_database_status():
     pins = PinDB.get_many()
     sessions = SessionDB.get_many()
     prompts = PromptDB.get_many()
+    status_docs = StatusDB.get_many()
     
     print(f"Total Documents:")
     print(f"  📌 Pins: {len(pins)}")
     print(f"  🔄 Sessions: {len(sessions)}")
     print(f"  💭 Prompts: {len(prompts)}")
+    print(f"  📈 Status: {len(status_docs)}")
     
     if pins:
         # Show pin status breakdown

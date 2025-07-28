@@ -23,6 +23,9 @@ class WorkflowOrchestrator:
         
         # Current session tracking
         self.current_session_id = None
+        
+        # Status tracking
+        self.current_status_id = None
     
     def _create_prompt_in_db(self):
         """Create prompt in database - called by specific workflow methods"""
@@ -41,6 +44,43 @@ class WorkflowOrchestrator:
             from ...database.sessions import SessionDB
             SessionDB.add_session_log(self.current_session_id, log_entry)
     
+    def setStatus(self, status: str, message: str = None, progress_percentage: float = None) -> None:
+        """
+        Update workflow status
+        """
+        if not self.prompt_id:
+            return
+        
+        try:
+            from ...database.status import StatusDB
+            
+            StatusDB.update_step_status(
+                prompt_id=str(self.prompt_id),
+                status=status,
+                message=message,
+                progress=progress_percentage
+            )
+            
+            self._log(f"Status updated: {status} - {message}")
+            
+        except Exception as e:
+            self._log(f"Failed to update status: {e}")
+    
+    def _initialize_workflow_status(self) -> str:
+        """Initialize workflow status tracking"""
+        try:
+            from ...database.status import StatusDB
+            
+            self.current_status_id = StatusDB.create_workflow_status(
+                prompt_id=str(self.prompt_id)
+            )
+            
+            return self.current_status_id
+            
+        except Exception as e:
+            self._log(f"Failed to initialize status tracking: {e}")
+            return None
+    
     async def run_pinterest_workflow(self, num_images: int = 20, headless: bool = True, 
                                    username: Optional[str] = None, password: Optional[str] = None) -> Dict:
         """
@@ -58,6 +98,10 @@ class WorkflowOrchestrator:
         # Create prompt in database
         self._create_prompt_in_db()
         
+        # Initialize workflow status tracking
+        # Initialize status tracking
+        self._initialize_workflow_status()
+        
         # Initialize Pinterest-specific components
         pinterest_workflow = PinterestWorkflowHandler(
             prompt=self.prompt,
@@ -68,6 +112,9 @@ class WorkflowOrchestrator:
         
         # Set current session for logging
         self.current_session_id = pinterest_workflow.current_session_id
+        
+        # Pass status tracking to Pinterest workflow
+        pinterest_workflow.orchestrator = self
         
         # Run Pinterest workflow
         return await pinterest_workflow.run_complete_workflow(num_images, headless)
@@ -86,6 +133,7 @@ class WorkflowOrchestrator:
             # Import database classes
             from ...database.prompts import PromptDB
             from ...database.sessions import SessionDB
+            from ...database.pins import PinDB
             
             # Get prompt to validate it exists
             prompt_doc = PromptDB.get_prompt_by_id(prompt_id)
@@ -95,25 +143,49 @@ class WorkflowOrchestrator:
                     "error": f"Prompt not found: {prompt_id}"
                 }
             
+            # Set prompt_id for status tracking (reuse existing status document)
+            self.prompt_id = prompt_id
+            
+            # Find existing status document - don't create a new one
+            from ...database.status import StatusDB
+            existing_status = StatusDB.get_workflow_progress(str(prompt_id))
+            if existing_status:
+                # Reuse existing status tracking
+                self.current_status_id = str(prompt_id)  # Use prompt_id as identifier
+            else:
+                # If no existing status, initialize one (shouldn't happen in normal flow)
+                self.current_status_id = self._initialize_workflow_status()
+            
             # Create AI validation session
             session_id = SessionDB.create_session(prompt_id, "validation")
             self.current_session_id = session_id
             
+            # Step: Initialization
+            self.setStatus("running", "Initializing AI validation system")
             self._log("=== AI VALIDATION PHASE ===")
             self._log(f"Starting AI validation for prompt: {prompt_doc['text']}")
             
             # Initialize AI evaluator
             evaluator = AIEvaluator()
+            self.setStatus("completed", "AI validation system initialized", progress_percentage=100.0)
             
-            # Run AI validation
+            # Step: Evaluation
+            self.setStatus("running", "Evaluating pins with AI model")
             result = await evaluator.evaluate_pins_for_prompt(prompt_id)
+            self.setStatus("completed", f"Evaluated {result.get('evaluated_count', 0)} pins", progress_percentage=100.0)
             
-            if result["success"]:
-                # Update session status
-                SessionDB.update_session_status(session_id, "completed")
+            # Step: Completion
+            if result.get("success"):
+                self.setStatus("running", "Finalizing validation results")
+                self._log(f"AI validation completed successfully")
+                self._log(f"Results: {result['approved_count']} approved, {result['disqualified_count']} disqualified")
                 
                 # Update prompt status to completed
                 PromptDB.update_prompt_status(prompt_id, "completed")
+                SessionDB.update_session_status(session_id, "completed")
+                
+                self.setStatus("completed", f"Validation completed: {result['approved_count']} approved, {result['disqualified_count']} disqualified", 
+                             progress_percentage=100.0)
                 
                 self._log(f"AI validation completed: {result['evaluated_count']} pins evaluated")
                 self._log(f"Results: {result['approved_count']} approved, {result['disqualified_count']} disqualified")
@@ -127,6 +199,9 @@ class WorkflowOrchestrator:
                     "disqualified_count": result["disqualified_count"]
                 }
             else:
+                # Failed
+                self.setStatus("failed", "AI validation failed")
+                
                 # Update session status to failed
                 SessionDB.update_session_status(session_id, "failed")
                 PromptDB.update_prompt_status(prompt_id, "error")
@@ -169,6 +244,9 @@ class PinterestWorkflowHandler:
         
         # Current session tracking
         self.current_session_id = None
+        
+        # Reference to orchestrator for status tracking
+        self.orchestrator = None
     
     def _log(self, message: str) -> None:
         """Add log message to current session"""
@@ -226,7 +304,7 @@ class PinterestWorkflowHandler:
     
     async def run_warmup_phase(self) -> bool:
         """
-        Execute Pinterest algorithm warmup phase
+        Execute Pinterest algorithm warmup phase with granular tracking
         
         Returns:
             bool: True if warmup successful
@@ -240,6 +318,10 @@ class PinterestWorkflowHandler:
         self.current_session_id = SessionDB.create_session(self.prompt_id, "warmup")
         
         try:
+            # Update status to running
+            if self.orchestrator:
+                self.orchestrator.setStatus("running", "Starting Pinterest algorithm warmup")
+            
             self._log(f"Starting warmup phase for prompt: '{self.prompt}'")
             
             warmup_success = await self.warmup_session.feed_algorithm()
@@ -247,20 +329,35 @@ class PinterestWorkflowHandler:
             if warmup_success:
                 self._log("Warmup phase completed successfully")
                 SessionDB.update_session_status(self.current_session_id, "ready")
+                
+                # Update status to completed
+                if self.orchestrator:
+                    self.orchestrator.setStatus("completed", "Pinterest algorithm warmup completed successfully")
+                
                 return True
             else:
-                self._log("Warmup phase failed, but continuing...")
+                self._log("Warmup phase failed - Pinterest algorithm warmup did not complete successfully")
                 SessionDB.update_session_status(self.current_session_id, "failed")
+                
+                # Update status to failed
+                if self.orchestrator:
+                    self.orchestrator.setStatus("failed", "Warmup phase failed")
+                
                 return False
                 
         except Exception as e:
             self._log(f"Warmup phase error: {e}")
             SessionDB.update_session_status(self.current_session_id, "failed")
+            
+            # Update status to failed
+            if self.orchestrator:
+                self.orchestrator.setStatus("failed", "Warmup phase error")
+            
             return False
     
     async def run_scraping_phase(self, num_images: int = 20) -> List[ObjectId]:
         """
-        Execute Pinterest feed scraping phase and save pins to database
+        Execute Pinterest feed scraping phase and save pins to database with granular tracking
         
         Args:
             num_images (int): Number of images to scrape
@@ -272,12 +369,19 @@ class PinterestWorkflowHandler:
             self._log("Session not properly initialized")
             return []
         
-        # Update session to scraping stage
+        # Create new scraping session (separate from warmup session)
         from ...database.sessions import SessionDB
         from ...database.pins import PinDB
-        SessionDB.update_session_stage(self.current_session_id, "scraping")
+        scraping_session_id = SessionDB.create_session(self.prompt_id, "scraping")
+        
+        # Keep track of scraping session separately
+        self.scraping_session_id = scraping_session_id
         
         try:
+            # Update status to running
+            if self.orchestrator:
+                self.orchestrator.setStatus("running", f"Starting scraping phase - collecting {num_images} pins")
+            
             self._log(f"Starting scraping phase - collecting {num_images} pins")
             
             # Navigate to Pinterest feed after warmup
@@ -295,43 +399,74 @@ class PinterestWorkflowHandler:
                 pin_ids = PinDB.create_pins_from_scraped_data(self.prompt_id, pin_data)
                 self._log(f"Saved {len(pin_ids)} pins to database")
                 
-                SessionDB.update_session_status(self.current_session_id, "ready")
+                # Update status to completed
+                if self.orchestrator:
+                    self.orchestrator.setStatus("completed", f"Scraping completed - found {len(pin_data)} pins", 
+                                              progress_percentage=100.0)
+                
+                SessionDB.update_session_status(self.scraping_session_id, "completed")
                 return pin_ids
             else:
                 self._log("No pins found during scraping")
-                SessionDB.update_session_status(self.current_session_id, "failed")
+                SessionDB.update_session_status(self.scraping_session_id, "failed")
+                
+                # Update status to failed
+                if self.orchestrator:
+                    self.orchestrator.setStatus("failed", "No pins found during scraping")
+                
                 return []
-            
+                
         except Exception as e:
             self._log(f"Scraping phase error: {e}")
-            SessionDB.update_session_status(self.current_session_id, "failed")
+            SessionDB.update_session_status(self.scraping_session_id, "failed")
+            
+            # Update status to failed
+            if self.orchestrator:
+                self.orchestrator.setStatus("failed", "Scraping phase error")
+            
             return []
     
     async def run_enrichment_phase(self) -> bool:
         """
-        Execute title enrichment phase for pins in database
+        Execute title enrichment phase for pins in database with granular tracking
         
         Returns:
             bool: True if enrichment successful
         """
-        # Update session to validation stage
+        # Use scraping session for enrichment (enrichment is part of scraping workflow)
         from ...database.sessions import SessionDB
         from ...database.pins import PinDB
-        SessionDB.update_session_stage(self.current_session_id, "validation")
+        
+        # Use scraping session ID if available, otherwise fall back to current session
+        enrichment_session_id = getattr(self, 'scraping_session_id', self.current_session_id)
         
         # Get pins from database
         pins = PinDB.get_pins_by_prompt(self.prompt_id)
         if not pins:
             self._log("No pins found in database to enrich")
-            SessionDB.update_session_status(self.current_session_id, "failed")
+            
+            # Update status to failed
+            if self.orchestrator:
+                self.orchestrator.setStatus("failed", "No pins found in database to enrich")
+            
+            SessionDB.update_session_status(enrichment_session_id, "failed")
             return False
         
         if not self.pins_handler:
             self._log("Pins handler not initialized")
-            SessionDB.update_session_status(self.current_session_id, "failed")
+            
+            # Update status to failed
+            if self.orchestrator:
+                self.orchestrator.setStatus("failed", "Pins handler not initialized")
+            
+            SessionDB.update_session_status(enrichment_session_id, "failed")
             return False
         
         try:
+            # Update status to running
+            if self.orchestrator:
+                self.orchestrator.setStatus("running", f"Starting title enrichment for {len(pins)} pins")
+            
             self._log(f"Starting title enrichment for {len(pins)} pins")
             
             # Convert database pins to format expected by enrichment
@@ -346,24 +481,37 @@ class PinterestWorkflowHandler:
                 }
                 pin_data_for_enrichment.append((pin["_id"], pin_data))
             
-            # Enrich titles
+            # Enrich titles with progress tracking
             enriched_data = await self.pins_handler.enrich_with_titles([data for _, data in pin_data_for_enrichment])
             
             # Update database with enriched titles
             from ...database.pins import PinDB
+            titles_found = 0
             for i, (pin_id, _) in enumerate(pin_data_for_enrichment):
                 if i < len(enriched_data) and enriched_data[i].get("title"):
                     # Update the pin in database with the new title
                     PinDB.update_pin_title(pin_id, enriched_data[i]["title"])
+                    titles_found += 1
             
             self._log(f"Title enrichment completed - {len(enriched_data)} pins processed")
-            SessionDB.update_session_status(self.current_session_id, "ready")
+            
+            # Update status to completed
+            if self.orchestrator:
+                self.orchestrator.setStatus("completed", f"Title enrichment completed - {len(enriched_data)} pins processed, {titles_found} titles found", 
+                                          progress_percentage=100.0)
+            
+            SessionDB.update_session_status(enrichment_session_id, "completed")
             
             return True
             
         except Exception as e:
             self._log(f"Enrichment phase error: {e}")
-            SessionDB.update_session_status(self.current_session_id, "failed")
+            
+            # Update status to failed
+            if self.orchestrator:
+                self.orchestrator.setStatus("failed", "Enrichment phase error")
+            
+            SessionDB.update_session_status(enrichment_session_id, "failed")
             return False
     
     async def run_complete_workflow(self, num_images: int = 20, headless: bool = True) -> Dict:
@@ -388,18 +536,25 @@ class PinterestWorkflowHandler:
         
         try:
             # Phase 1: Initialize session
+            if self.orchestrator:
+                self.orchestrator.setStatus(1, "running", "Initializing Pinterest session and browser")
+            
             self._log("=== INITIALIZATION PHASE ===")
             init_success = await self.initialize_session(headless=headless)
             if not init_success:
+                if self.orchestrator:
+                    self.orchestrator.setStatus(1, "failed", "Session initialization failed", error_message="Failed to initialize Pinterest session")
                 workflow_result['error'] = "Session initialization failed"
                 return workflow_result
             
-            # Phase 2: Warmup
+            if self.orchestrator:
+                self.orchestrator.setStatus(1, "completed", "Pinterest session initialized successfully")
+            
+            # Phase 2: Warmup (status handled by run_warmup_phase)
             self._log("=== WARMUP PHASE ===")
             warmup_success = await self.run_warmup_phase()
-            # Continue even if warmup fails
             
-            # Phase 3: Scraping
+            # Phase 3: Scraping (status handled by run_scraping_phase)
             self._log("=== SCRAPING PHASE ===")
             pin_ids = await self.run_scraping_phase(num_images=num_images)
             if not pin_ids:
@@ -407,7 +562,7 @@ class PinterestWorkflowHandler:
                 PromptDB.update_prompt_status(self.prompt_id, "error")
                 return workflow_result
             
-            # Phase 4: Title enrichment
+            # Phase 4: Title enrichment (status handled by run_enrichment_phase)
             self._log("=== ENRICHMENT PHASE ===")
             enrichment_success = await self.run_enrichment_phase()
             
