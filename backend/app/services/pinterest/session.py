@@ -2,6 +2,7 @@ import os
 import asyncio
 from datetime import datetime
 from playwright.async_api import async_playwright
+from .pins import PinterestPins
 
 class PinterestSession:
     def __init__(self, username=None, password=None):
@@ -112,197 +113,58 @@ class PinterestSession:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.close()
     
-    async def scrape_feed(self, num_images=10, scroll_attempts_limit=10, download=False, output_name="feed_images"):
+    async def scrape_feed(self, num_images=10):
         """
-        Scrape images from the user's Pinterest feed after login.
+        Scrape Pinterest feed for pin data using PinterestPins service
         
         Args:
-            num_images: Number of images to scrape
-            scroll_attempts_limit: Maximum scroll attempts
-            download: Whether to download images locally
-            output_name: Name for the output folder
-        
+            num_images: Number of pins to scrape
+            
         Returns:
-            List of image URLs
+            List of pin dictionaries with image_url, pin_url, title, description, metadata
         """
         if not self.page:
             print("Session not initialized. Call initialize() first.")
             return []
         
+        # Navigate to Pinterest feed if needed
+        current_url = self.page.url
+        if "pinterest.com" in current_url and "/login" not in current_url:
+            print("Already on Pinterest homepage, no need to navigate")
+        else:
+            print("Refreshing page and navigating to feed...")
+            await self.page.goto("https://www.pinterest.com/", timeout=30000)
+        
+        await asyncio.sleep(3)
+        
+        # Wait for feed to load
+        print("Waiting for feed to load...")
         try:
-            # Check if we're already on Pinterest homepage
-            current_url = self.page.url
-            if "pinterest.com" in current_url and "/login" not in current_url:
-                print("Already on Pinterest homepage, no need to navigate")
-            else:
-                print("Navigating to Pinterest feed...")
-                await self.page.goto("https://www.pinterest.com/", timeout=30000)
-            
-            await asyncio.sleep(3)
-            
-            # Wait for the feed to load
-            print("Waiting for feed to load...")
-            try:
-                await self.page.wait_for_selector('div[data-test-id="pinWrapper"]', timeout=15000)
-            except:
-                print("Feed elements not found immediately, continuing anyway...")
-            
-            pin_data = []  # Store pin data with URLs and metadata
-            scroll_attempts = 0
-            
-            while len(pin_data) < num_images and scroll_attempts < scroll_attempts_limit:
-                print(f"Collecting images: {len(pin_data)}/{num_images}")
-                
-                # Find pin wrappers in the feed
-                pins = await self.page.query_selector_all("div[data-test-id='pinWrapper']")
-                print(f"Found {len(pins)} pins in feed")
-                
-                # Extract URLs from pins in order, avoiding duplicates
-                for pin in pins:
-                    if len(pin_data) >= num_images:
-                        break
-                        
-                    try:
-                        image_element = await pin.query_selector("img")
-                        if image_element:
-                            # Get pin URL (Pinterest link)
-                            pin_url = None
-                            pin_link = await pin.query_selector("a[href*='/pin/']")
-                            if pin_link:
-                                href = await pin_link.get_attribute("href")
-                                if href:
-                                    pin_url = f"https://pinterest.com{href}" if href.startswith("/") else href
-                            
-                            # Title extraction: rich-pin-information only exists in pin detail view, not feed
-                            # For now, titles will be null - can be populated later via pin page navigation if needed
-                            title = None
-                            
-                            # Get description from image alt attribute
-                            description = None
-                            try:
-                                img_element = await pin.query_selector("img")
-                                if img_element:
-                                    alt_text = await img_element.get_attribute("alt")
-                                    if alt_text and alt_text.strip():
-                                        # Clean up Pinterest's "This may contain: " prefix
-                                        description = alt_text.strip()
-                                        if description.startswith("This may contain: "):
-                                            description = description.replace("This may contain: ", "", 1)
-                            except Exception:
-                                pass
-                            
-                            # Get image URL
-                            image_url = None
-                            # Try to get srcset first for higher quality
-                            srcset = await image_element.get_attribute("srcset")
-                            if srcset:
-                                highest_res_url = None
-                                highest_res = 0
-                                for part in srcset.split(","):
-                                    part = part.strip()
-                                    if not part:
-                                        continue
-                                    parts = part.split(" ")
-                                    if len(parts) >= 2:
-                                        url = parts[0]
-                                        try:
-                                            res = int(parts[1].replace("x", ""))
-                                            if res > highest_res:
-                                                highest_res = res
-                                                highest_res_url = url
-                                        except ValueError:
-                                            pass
-                                            
-                                if highest_res_url and highest_res_url.startswith("http"):
-                                    image_url = highest_res_url
-                            else:
-                                # Fallback to src attribute
-                                src = await image_element.get_attribute("src")
-                                if src and src.startswith("http"):
-                                    # Try to get higher resolution version
-                                    if "236x" in src:
-                                        src = src.replace("236x", "736x")
-                                    elif "474x" in src:
-                                        src = src.replace("474x", "736x")
-                                    image_url = src
-                            
-                            # Only add if we have both URLs and haven't seen this image before
-                            if image_url and pin_url:
-                                # Check for duplicates
-                                if not any(p['image_url'] == image_url for p in pin_data):
-                                    pin_data.append({
-                                        'image_url': image_url,
-                                        'pin_url': pin_url,
-                                        'title': title,  # From h1 on pin page
-                                        'description': description,  # From alt text, cleaned
-                                        'metadata': {
-                                            'collected_at': datetime.now().isoformat()
-                                        }
-                                    })
-                    except Exception as e:
-                        print(f"Error processing pin: {e}")
-                        continue
-                
-                if len(pin_data) >= num_images:
-                    break
-                    
-                # Only scroll if we need more images
-                print(f"Found {len(pin_data)} images so far, scrolling for more...")
-                await self.page.evaluate("window.scrollBy(0, 1000)")
-                await asyncio.sleep(2)
-                scroll_attempts += 1
-                
-        except Exception as e:
-            print(f"Error during feed scraping: {e}")
-            return []
+            await self.page.wait_for_selector('div[data-test-id="pinWrapper"]', timeout=15000)
+        except:
+            print("Feed elements not found immediately, continuing anyway...")
         
-        pin_data_list = pin_data[:num_images]  # Already a list, just slice
-        print(f"\nTotal images found in feed: {len(pin_data_list)}")
-        
-        return pin_data_list
+        # Use PinterestPins service to extract pin data
+        pins_service = PinterestPins(self.page)
+        return await pins_service.scrape_feed(num_images)
     
     async def enrich_with_titles(self, pin_data_list):
-        """Navigate to each pin URL to extract h1 titles"""
-        if not pin_data_list:
-            return pin_data_list
+        """
+        Enrich pin data with titles using PinterestPins service
+        
+        Args:
+            pin_data_list: List of pin dictionaries from scrape_feed()
             
-        print(f"\nEnriching {len(pin_data_list)} pins with titles...")
-        enriched_data = []
+        Returns:
+            List of pin dictionaries enriched with titles
+        """
+        if not self.page:
+            print("Session not initialized. Call initialize() first.")
+            return pin_data_list
         
-        for i, pin_data in enumerate(pin_data_list):
-            try:
-                print(f"Fetching title {i+1}/{len(pin_data_list)}...")
-                
-                # Navigate to pin page
-                await self.page.goto(pin_data['pin_url'], timeout=15000)
-                await asyncio.sleep(2)
-                
-                # Extract title from rich-pin-information
-                title = None
-                try:
-                    title_element = await self.page.query_selector('div[data-test-id="rich-pin-information"] h1')
-                    if title_element:
-                        title = await title_element.text_content()
-                        title = title.strip() if title else None
-                        print(f"  Found: {title}")
-                    else:
-                        print("  No title found")
-                except Exception:
-                    print("  Title extraction failed")
-                
-                # Update pin data with title
-                enriched_pin = pin_data.copy()
-                enriched_pin['title'] = title
-                enriched_data.append(enriched_pin)
-                
-            except Exception as e:
-                print(f"  Error fetching title for pin {i+1}: {e}")
-                # Keep original data without title
-                enriched_data.append(pin_data)
-                continue
-        
-        print(f"Title enrichment completed!")
-        return enriched_data
+        # Use PinterestPins service to enrich with titles
+        pins_service = PinterestPins(self.page)
+        return await pins_service.enrich_with_titles(pin_data_list)
     
     async def close(self):
         if self.browser:

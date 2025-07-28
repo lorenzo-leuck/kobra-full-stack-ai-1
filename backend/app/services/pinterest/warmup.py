@@ -117,7 +117,7 @@ class PinterestWarmup(PinterestSession):
             print(f"Error during warm-up: {e}")
             return False
     
-    async def scrape_after_warmup(self, num_images=10, download=True, output_name=None):
+    async def scrape_after_warmup(self, num_images=10, download=False, output_name=None):
         """
         Refresh page and scrape feed after warm-up
         """
@@ -126,13 +126,8 @@ class PinterestWarmup(PinterestSession):
             await self.page.goto("https://www.pinterest.com/", timeout=30000)
             await asyncio.sleep(3)
             
-            # Use the parent class method to scrape feed
-            folder_name = output_name or f"warmup_{self.prompt.replace(' ', '_')}"
-            return await self.scrape_feed(
-                num_images=num_images,
-                download=download,
-                output_name=folder_name
-            )
+            # Use the parent class method to scrape feed (refactored version only takes num_images)
+            return await self.scrape_feed(num_images=num_images)
             
         except Exception as e:
             print(f"Error during post-warmup scraping: {e}")

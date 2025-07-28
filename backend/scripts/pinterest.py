@@ -7,8 +7,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 # Add app directory to path for imports
-sys.path.append(str(Path(__file__).parent.parent / "app"))
-from services.pinterest.warmup import PinterestWarmup
+sys.path.append(str(Path(__file__).parent.parent))
+from app.services.pinterest.warmup import PinterestWarmup
 
 # Load environment variables
 load_dotenv()
