@@ -105,6 +105,25 @@ python3 scripts/pinterest.py "80s rappers" 15 --headless --output-name vintage_h
 - JSON metadata: `exports/warmup_prompt/warmup_prompt_metadata.json`
 - Downloaded images: `exports/warmup_prompt/warmup_prompt_N.jpg`
 
+### Database Management Script
+
+```bash
+cd backend
+# Interactive database management
+python3 scripts/database.py
+
+# Or use command line options
+python3 scripts/database.py --clear          # Clear all collections
+python3 scripts/database.py --setup-agents   # Setup AI agent configurations
+python3 scripts/database.py --status         # Show database status
+```
+
+**Features:**
+- **Setup AI Agents**: Configure GPT-4o with optimized prompts and temperature settings
+- **Clear Database**: Remove all data from collections (prompts, sessions, pins, status, agents)
+- **Database Status**: View collection counts and sample documents
+- **Interactive Menu**: User-friendly interface for database operations
+
 # Architecture
 
 ## Backend
@@ -130,35 +149,46 @@ The backend for the AI-powered Pinterest scraper system uses FastAPI, Pydantic, 
 
 ### MongoDB Collections
 
-The application uses four MongoDB collections with the following schemas:
+The application uses five MongoDB collections with the following schemas:
 
 1. **prompts**:
    - `_id`: ObjectId - Unique identifier
    - `text`: string - The visual prompt text
    - `created_at`: ISODate - When the prompt was created
-   - `status`: enum("pending", "completed", "error") - Current status
+   - `status`: enum("pending", "ready", "completed", "error") - Current status
 
-2. **sessions**:
+2. **sessions** (3 documents per prompt):
    - `_id`: ObjectId - Unique identifier
    - `prompt_id`: ObjectId - Reference to the prompt
-   - `stage`: enum("warmup", "scraping", "validation") - Processing stage
-   - `status`: enum("pending", "completed", "failed") - Current status
-   - `timestamp`: ISODate - When the session was created/updated
-   - `log`: array of strings - Processing logs
+   - `stage`: enum("warmup", "scraping", "validation") - Workflow stage
+   - `status`: enum("pending", "completed", "failed") - Session status
+   - `timestamp`: ISODate - Last updated timestamp
+   - `log`: array[string] - Timestamped log messages for this stage
 
 3. **pins**:
    - `_id`: ObjectId - Unique identifier
    - `prompt_id`: ObjectId - Reference to the prompt
-   - `image_url`: string - URL to the image
-   - `pin_url`: string - URL to the Pinterest pin
-   - `title`: string - Pin title
-   - `description`: string - Pin description
-   - `match_score`: float - AI evaluation score (0.0-1.0)
+   - `image_url`: string - Pinterest CDN image URL
+   - `pin_url`: string - Original Pinterest pin URL
+   - `title`: string - Pin title (enriched from pin page)
+   - `description`: string - Pin description/alt text
+   - `match_score`: number - AI evaluation score (0.0-1.0)
    - `status`: enum("ready", "approved", "disqualified") - Processing/evaluation status
    - `ai_explanation`: string - AI reasoning for the score
    - `metadata`: object - Collection metadata with timestamps
 
-4. **agents**:
+4. **status** (1 document per prompt):
+   - `_id`: ObjectId - Unique identifier
+   - `prompt_id`: ObjectId - Reference to the prompt
+   - `overall_status`: enum("pending", "running", "completed", "failed") - Workflow status
+   - `current_step`: number - Current step number (equals total_steps when completed)
+   - `total_steps`: number - Total number of workflow steps (equals message count)
+   - `progress`: number - Progress percentage (0.0-100.0)
+   - `messages`: array[string] - Step-by-step progress messages
+   - `started_at`: ISODate - Workflow start timestamp
+   - `completed_at`: ISODate - Workflow completion timestamp
+
+5. **agents**:
    - `_id`: ObjectId - Unique identifier
    - `title`: string - Agent identifier (e.g., "pin-evaluator")
    - `model`: string - AI model name (e.g., "gpt-4o")
@@ -179,8 +209,10 @@ backend/
 │   │   ├── __init__.py      # Exports all database classes
 │   │   ├── base.py          # BaseDB with common CRUD operations
 │   │   ├── prompts.py       # PromptDB + PromptSchema
-│   │   ├── sessions.py      # SessionDB + SessionSchema
-│   │   └── pins.py          # PinDB + PinSchema + PinMetadata
+│   │   ├── sessions.py      # SessionDB + SessionSchema (3 docs per prompt)
+│   │   ├── pins.py          # PinDB + PinSchema + PinMetadata
+│   │   ├── status.py        # StatusDB + StatusSchema (1 doc per prompt)
+│   │   └── agents.py        # AgentDB + AgentSchema (AI configuration)
 │   ├── models/              # Pydantic models (legacy)
 │   │   ├── __init__.py
 │   │   ├── prompt.py        # Prompt model with MongoDB ObjectId
@@ -205,9 +237,11 @@ backend/
 │           ├── __init__.py
 │           └── evaluator.py # Image-prompt matching with explanations
 ├── scripts/                 # Standalone scripts
-│   ├── workflow.py          # NEW: Workflow orchestrator script (recommended)
+│   ├── workflow.py          # Complete workflow orchestrator (recommended)
+│   ├── database.py          # Database management and setup
 │   ├── pinterest.py         # Legacy Pinterest scraping CLI
-│   └── download.py          # Image download utilities
+│   ├── download.py          # Image download utilities
+│   └── pydantic_setup.py    # Pydantic AI setup script
 ├── exports/                 # Generated data exports
 │   └── warmup_*/            # Per-prompt export folders
 ├── requirements.txt         # Project dependencies
@@ -216,19 +250,28 @@ backend/
 
 ### Workflow Orchestrator Architecture
 
-The system now uses a modular workflow orchestrator that separates concerns and enables future expansion:
+The system uses a modular workflow orchestrator with comprehensive status tracking and session management:
 
 **WorkflowOrchestrator**:
 - Generic orchestration class that coordinates different services
 - Manages prompt creation and database persistence
-- Provides clean interfaces: `run_pinterest_workflow()`, `run_ai_agent_workflow()` (future)
-- Handles error recovery and status tracking
+- Provides clean interfaces: `run_pinterest_workflow()`, `run_ai_validation_workflow()`
+- Comprehensive status tracking with step-by-step progress
+- Error recovery and graceful failure handling
 
 **PinterestWorkflowHandler**:
-- Pinterest-specific implementation
-- Manages browser sessions, warmup, scraping, and title enrichment
+- Pinterest-specific implementation with 3-phase workflow
+- **Phase 1**: Warmup (creates warmup session)
+- **Phase 2**: Scraping + Enrichment (creates scraping session)
+- **Phase 3**: AI Validation (creates validation session)
 - Integrates with database layer for data persistence
 - Handles Pinterest authentication and session management
+
+**Status & Session Tracking**:
+- **Status Collection**: 1 document per prompt with overall progress (0-100%)
+- **Sessions Collection**: 3 documents per prompt (warmup, scraping, validation)
+- **Real-time Updates**: Step-by-step progress messages and completion tracking
+- **Error Handling**: Detailed error messages and failure point identification
 
 ## Frontend
 
@@ -441,7 +484,6 @@ The Pinterest scraping system implements a sophisticated warm-up strategy to ali
 * 0.3 - Backend setup
 * 0.4 - Docker compose setup
 * 0.5 - MongoDB schema implementation with collections for prompts, sessions, and pins
-
 
 # License
 
