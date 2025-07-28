@@ -5,6 +5,7 @@ from bson import ObjectId
 
 from ..pinterest.warmup import PinterestWarmup
 from ..pinterest.pins import PinterestPins
+from ..ai.evaluator import AIEvaluator
 
 
 class WorkflowOrchestrator:
@@ -70,6 +71,81 @@ class WorkflowOrchestrator:
         
         # Run Pinterest workflow
         return await pinterest_workflow.run_complete_workflow(num_images, headless)
+    
+    async def run_ai_validation_workflow(self, prompt_id: ObjectId) -> Dict:
+        """
+        Execute AI validation workflow for pins with status "ready"
+        
+        Args:
+            prompt_id (ObjectId): Prompt ID to validate pins for
+            
+        Returns:
+            Dict: AI validation results with counts and status
+        """
+        try:
+            # Import database classes
+            from ...database.prompts import PromptDB
+            from ...database.sessions import SessionDB
+            
+            # Get prompt to validate it exists
+            prompt_doc = PromptDB.get_prompt_by_id(prompt_id)
+            if not prompt_doc:
+                return {
+                    "success": False,
+                    "error": f"Prompt not found: {prompt_id}"
+                }
+            
+            # Create AI validation session
+            session_id = SessionDB.create_session(prompt_id, "validation")
+            self.current_session_id = session_id
+            
+            self._log("=== AI VALIDATION PHASE ===")
+            self._log(f"Starting AI validation for prompt: {prompt_doc['text']}")
+            
+            # Initialize AI evaluator
+            evaluator = AIEvaluator()
+            
+            # Run AI validation
+            result = await evaluator.evaluate_pins_for_prompt(prompt_id)
+            
+            if result["success"]:
+                # Update session status
+                SessionDB.update_session_status(session_id, "completed")
+                
+                # Update prompt status to completed
+                PromptDB.update_prompt_status(prompt_id, "completed")
+                
+                self._log(f"AI validation completed: {result['evaluated_count']} pins evaluated")
+                self._log(f"Results: {result['approved_count']} approved, {result['disqualified_count']} disqualified")
+                
+                return {
+                    "success": True,
+                    "prompt_id": str(prompt_id),
+                    "message": result["message"],
+                    "evaluated_count": result["evaluated_count"],
+                    "approved_count": result["approved_count"],
+                    "disqualified_count": result["disqualified_count"]
+                }
+            else:
+                # Update session status to failed
+                SessionDB.update_session_status(session_id, "failed")
+                PromptDB.update_prompt_status(prompt_id, "error")
+                
+                return {
+                    "success": False,
+                    "error": result.get("message", "AI validation failed")
+                }
+                
+        except Exception as e:
+            self._log(f"AI validation error: {e}")
+            
+            if self.current_session_id:
+                SessionDB.update_session_status(self.current_session_id, "failed")
+            
+            return {
+                "success": False,
+                "error": str(e)
+            }
 
 
 class PinterestWorkflowHandler:
@@ -379,7 +455,7 @@ class PinterestWorkflowHandler:
         from ...database.sessions import SessionDB
         from ...database.pins import PinDB
         
-        prompt_doc = PromptDB.get_prompt(self.prompt_id)
+        prompt_doc = PromptDB.get_prompt_by_id(self.prompt_id)
         sessions = SessionDB.get_sessions_by_prompt(self.prompt_id)
         pin_count = PinDB.count_pins_by_prompt(self.prompt_id)
         

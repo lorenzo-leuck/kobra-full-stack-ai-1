@@ -54,7 +54,7 @@ class PromptDB(BaseDB):
         return cls.update_by_id(prompt_id, {"$set": {"status": status}})
     
     @classmethod
-    def get_prompt(cls, prompt_id: ObjectId) -> Optional[dict]:
+    def get_prompt_by_id(cls, prompt_id: ObjectId) -> Optional[dict]:
         """
         Get prompt by ID
         
@@ -65,6 +65,16 @@ class PromptDB(BaseDB):
             Optional[dict]: Prompt document or None
         """
         return cls.get_by_id(prompt_id)
+    
+    @classmethod
+    def get_all_prompts(cls) -> List[dict]:
+        """
+        Get all prompts
+        
+        Returns:
+            List[dict]: List of all prompt documents
+        """
+        return cls.get_many(sort_by="created_at", sort_order=-1)
     
     @classmethod
     def get_prompts_by_status(cls, status: str) -> List[dict]:
