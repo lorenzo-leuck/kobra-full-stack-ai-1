@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { CheckCircle, Clock, AlertCircle, Loader2, Heart, Search, Brain } from 'lucide-react';
+import ThemeToggle from './ThemeToggle';
 
 interface AgentProgressProps {
   promptId: string;
@@ -132,19 +133,20 @@ export default function AgentProgress({ promptId, onComplete }: AgentProgressPro
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:bg-gradient-to-br dark:from-gray-900 dark:via-blue-900 dark:to-indigo-900 p-4 relative">
+      <ThemeToggle />
       <div className="max-w-4xl mx-auto">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">AI Agent Working</h1>
-          <p className="text-gray-600">Processing your visual prompt with intelligent automation</p>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">AI Agent Working</h1>
+          <p className="text-gray-600 dark:text-gray-300">Processing your visual prompt with intelligent automation</p>
         </div>
 
-        <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-8 border border-gray-200 mb-6">
+        <div className="bg-white/80 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl p-8 border border-gray-200 dark:border-gray-700 mb-6">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-semibold text-gray-800">Overall Progress</h2>
-            <span className="text-sm font-medium text-gray-600">{Math.round(overallProgress)}%</span>
+            <h2 className="text-xl font-semibold text-gray-800 dark:text-white">Overall Progress</h2>
+            <span className="text-sm font-medium text-gray-600 dark:text-gray-300">{Math.round(overallProgress)}%</span>
           </div>
-          <div className="w-full bg-gray-200 rounded-full h-3 mb-4">
+          <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 mb-4">
             <div 
               className="bg-gradient-to-r from-blue-500 to-purple-600 h-3 rounded-full transition-all duration-500 ease-out"
               style={{ width: `${overallProgress}%` }}
@@ -154,20 +156,20 @@ export default function AgentProgress({ promptId, onComplete }: AgentProgressPro
 
         <div className="space-y-6">
           {stages.map((stage) => (
-            <div key={stage.id} className="bg-white/80 backdrop-blur-sm rounded-2xl border border-gray-200 overflow-hidden">
+            <div key={stage.id} className="bg-white/80 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
               <div className="p-6">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-4">
                     <div className={`p-3 rounded-full ${
-                      stage.status === 'completed' ? 'bg-green-100' :
-                      stage.status === 'active' ? 'bg-blue-100' :
-                      stage.status === 'failed' ? 'bg-red-100' : 'bg-gray-100'
+                      stage.status === 'completed' ? 'bg-green-100 dark:bg-green-900/30' :
+                      stage.status === 'active' ? 'bg-blue-100 dark:bg-blue-900/30' :
+                      stage.status === 'failed' ? 'bg-red-100 dark:bg-red-900/30' : 'bg-gray-100 dark:bg-gray-700'
                     }`}>
                       {stage.status === 'pending' ? stage.icon : getStatusIcon(stage.status)}
                     </div>
                     <div>
-                      <h3 className="text-lg font-semibold text-gray-800">{stage.name}</h3>
-                      <p className="text-gray-600">{stage.description}</p>
+                      <h3 className="text-lg font-semibold text-gray-800 dark:text-white">{stage.name}</h3>
+                      <p className="text-gray-600 dark:text-gray-300">{stage.description}</p>
                     </div>
                   </div>
 
@@ -176,12 +178,12 @@ export default function AgentProgress({ promptId, onComplete }: AgentProgressPro
 
 
                 {stage.logs && stage.logs.length > 0 && (
-                  <div className="bg-gray-50 rounded-lg p-4 mt-4">
-                    <h4 className="text-sm font-medium text-gray-700 mb-2">Activity Log</h4>
+                  <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 mt-4">
+                    <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Activity Log</h4>
                     <div className="space-y-1">
                       {stage.logs.map((log, logIndex) => (
-                        <div key={logIndex} className="text-sm text-gray-600 flex items-center gap-2">
-                          <div className="w-1.5 h-1.5 bg-gray-400 rounded-full flex-shrink-0" />
+                        <div key={logIndex} className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-2">
+                          <div className="w-1.5 h-1.5 bg-gray-400 dark:bg-gray-500 rounded-full flex-shrink-0" />
                           {log}
                         </div>
                       ))}

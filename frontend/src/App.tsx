@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import PromptSubmission from './components/PromptSubmission';
 import AgentProgress from './components/AgentProgress';
 import ImageReview from './components/ImageReview';
@@ -10,6 +10,14 @@ function App() {
   const [currentPrompt, setCurrentPrompt] = useState('');
   const [promptId, setPromptId] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    // Initialize theme on app load
+    const theme = localStorage.getItem('theme') || 'light';
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    }
+  }, []);
 
   const handlePromptSubmit = async (prompt: string) => {
     setCurrentPrompt(prompt);

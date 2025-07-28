@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Filter, Grid, List, CheckCircle, XCircle, ExternalLink, Star, BarChart3 } from 'lucide-react';
+import { ArrowLeft, Filter, Grid, List, CheckCircle, XCircle, ExternalLink, Star, BarChart3 } from 'lucide-react';
 import StatusBadge from './StatusBadge';
 import ScoreBar from './ScoreBar';
 import LoadingSpinner from './LoadingSpinner';
+import ThemeToggle from './ThemeToggle';
 
 interface Pin {
   _id: string;
@@ -140,42 +141,44 @@ export default function ImageReview({ promptId, originalPrompt, onBack }: ImageR
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 dark:bg-gradient-to-br dark:from-gray-900 dark:via-blue-900 dark:to-indigo-900 flex items-center justify-center">
         <div className="text-center">
-          <LoadingSpinner size="lg" className="mx-auto mb-4 text-emerald-600" />
-          <p className="text-gray-600">Loading validated results...</p>
+          <LoadingSpinner size="lg" className="mx-auto mb-4 text-emerald-600 dark:text-emerald-400" />
+          <p className="text-gray-600 dark:text-gray-300">Loading validated results...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 p-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:bg-gradient-to-br dark:from-gray-900 dark:via-blue-900 dark:to-indigo-900 p-4 relative">
+      <ThemeToggle />
       <div className="max-w-7xl mx-auto">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <button
+            <button 
               onClick={onBack}
-              className="text-emerald-600 hover:text-emerald-700 mb-4 flex items-center gap-2 text-sm font-medium"
+              className="flex items-center gap-2 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-white transition-colors mb-4"
             >
-              ← Back to Search
+              <ArrowLeft className="w-5 h-5" />
+              Back to Search
             </button>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Validation Results</h1>
-            <p className="text-gray-600">
-              AI-validated Pinterest images for: <span className="font-medium text-emerald-700">"{originalPrompt}"</span>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Validation Results</h1>
+            <p className="text-gray-600 dark:text-gray-300">
+              AI-validated Pinterest images for: <span className="font-medium text-blue-600 dark:text-blue-400">"{originalPrompt}"</span>
             </p>
           </div>
           <div className="flex items-center gap-4">
-            <div className="flex bg-white rounded-lg border border-gray-200 p-1">
+            <div className="flex bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-1">
               <button
                 onClick={() => setViewMode('grid')}
-                className={`p-2 rounded ${viewMode === 'grid' ? 'bg-emerald-100 text-emerald-700' : 'text-gray-500 hover:text-gray-700'}`}
+                className={`p-2 rounded ${viewMode === 'grid' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
               >
                 <Grid className="w-4 h-4" />
               </button>
               <button
                 onClick={() => setViewMode('list')}
-                className={`p-2 rounded ${viewMode === 'list' ? 'bg-emerald-100 text-emerald-700' : 'text-gray-500 hover:text-gray-700'}`}
+                className={`p-2 rounded ${viewMode === 'list' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
               >
                 <List className="w-4 h-4" />
               </button>
@@ -183,49 +186,49 @@ export default function ImageReview({ promptId, originalPrompt, onBack }: ImageR
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white/80 backdrop-blur-sm rounded-xl p-6 border border-gray-200">
-            <div className="flex items-center gap-3 mb-2">
-              <CheckCircle className="w-5 h-5 text-green-500" />
-              <span className="font-medium text-gray-700">Approved</span>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <div className="bg-white/80 dark:bg-gray-800/90 backdrop-blur-sm rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+            <div className="flex items-center gap-2 mb-2">
+              <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
+              <span className="text-sm font-medium text-gray-600 dark:text-gray-300">Approved</span>
             </div>
-            <div className="text-2xl font-bold text-gray-900">{approvedCount}</div>
+            <div className="text-2xl font-bold text-gray-900 dark:text-white">{approvedCount}</div>
           </div>
-          <div className="bg-white/80 backdrop-blur-sm rounded-xl p-6 border border-gray-200">
-            <div className="flex items-center gap-3 mb-2">
-              <XCircle className="w-5 h-5 text-red-500" />
-              <span className="font-medium text-gray-700">Disqualified</span>
+          <div className="bg-white/80 dark:bg-gray-800/90 backdrop-blur-sm rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+            <div className="flex items-center gap-2 mb-2">
+              <XCircle className="w-5 h-5 text-red-600 dark:text-red-400" />
+              <span className="text-sm font-medium text-gray-600 dark:text-gray-300">Disqualified</span>
             </div>
-            <div className="text-2xl font-bold text-gray-900">{disqualifiedCount}</div>
+            <div className="text-2xl font-bold text-gray-900 dark:text-white">{disqualifiedCount}</div>
           </div>
-          <div className="bg-white/80 backdrop-blur-sm rounded-xl p-6 border border-gray-200">
-            <div className="flex items-center gap-3 mb-2">
-              <Star className="w-5 h-5 text-yellow-500" />
-              <span className="font-medium text-gray-700">Avg Score</span>
+          <div className="bg-white/80 dark:bg-gray-800/90 backdrop-blur-sm rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+            <div className="flex items-center gap-2 mb-2">
+              <Star className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
+              <span className="text-sm font-medium text-gray-600 dark:text-gray-300">Avg Score</span>
             </div>
-            <div className="text-2xl font-bold text-gray-900">{(avgScore * 100).toFixed(0)}%</div>
+            <div className="text-2xl font-bold text-gray-900 dark:text-white">{Math.round(avgScore * 100)}%</div>
           </div>
-          <div className="bg-white/80 backdrop-blur-sm rounded-xl p-6 border border-gray-200">
-            <div className="flex items-center gap-3 mb-2">
-              <BarChart3 className="w-5 h-5 text-blue-500" />
-              <span className="font-medium text-gray-700">Total</span>
+          <div className="bg-white/80 dark:bg-gray-800/90 backdrop-blur-sm rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+            <div className="flex items-center gap-2 mb-2">
+              <BarChart3 className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+              <span className="text-sm font-medium text-gray-600 dark:text-gray-300">Total</span>
             </div>
-            <div className="text-2xl font-bold text-gray-900">{pins.length}</div>
+            <div className="text-2xl font-bold text-gray-900 dark:text-white">{pins.length}</div>
           </div>
         </div>
 
-        <div className="bg-white/80 backdrop-blur-sm rounded-xl p-6 border border-gray-200 mb-8">
-          <div className="flex items-center gap-4 mb-4">
-            <Filter className="w-5 h-5 text-gray-600" />
-            <span className="font-medium text-gray-700">Filters</span>
+        <div className="bg-white/80 dark:bg-gray-800/90 backdrop-blur-sm rounded-xl p-6 border border-gray-200 dark:border-gray-700 mb-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Filter className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+            <span className="font-medium text-gray-700 dark:text-gray-200">Filters</span>
           </div>
           <div className="flex flex-wrap items-center gap-4">
             <div className="flex items-center gap-2">
-              <label className="text-sm font-medium text-gray-600">Status:</label>
+              <label className="text-sm font-medium text-gray-600 dark:text-gray-300">Status:</label>
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as any)}
-                className="px-3 py-1 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="px-3 py-1 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               >
                 <option value="all">All</option>
                 <option value="approved">Approved</option>
@@ -233,7 +236,7 @@ export default function ImageReview({ promptId, originalPrompt, onBack }: ImageR
               </select>
             </div>
             <div className="flex items-center gap-2">
-              <label className="text-sm font-medium text-gray-600">Min Score:</label>
+              <label className="text-sm font-medium text-gray-600 dark:text-gray-300">Min Score:</label>
               <input
                 type="range"
                 min="0"
@@ -243,9 +246,9 @@ export default function ImageReview({ promptId, originalPrompt, onBack }: ImageR
                 onChange={(e) => setScoreThreshold(parseFloat(e.target.value))}
                 className="w-24"
               />
-              <span className="text-sm text-gray-600 w-12">{(scoreThreshold * 100).toFixed(0)}%</span>
+              <span className="text-sm text-gray-600 dark:text-gray-300 w-12">{(scoreThreshold * 100).toFixed(0)}%</span>
             </div>
-            <div className="text-sm text-gray-500">
+            <div className="text-sm text-gray-500 dark:text-gray-400">
               Showing {filteredPins.length} of {pins.length} results
             </div>
           </div>
@@ -256,7 +259,7 @@ export default function ImageReview({ promptId, originalPrompt, onBack }: ImageR
           : 'space-y-4'
         }>
           {filteredPins.map((pin) => (
-            <div key={pin._id} className={`bg-white/80 backdrop-blur-sm rounded-xl border border-gray-200 overflow-hidden hover:shadow-lg transition-all duration-200 ${
+            <div key={pin._id} className={`bg-white/80 dark:bg-gray-800/90 backdrop-blur-sm rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-lg transition-all duration-200 ${
               viewMode === 'list' ? 'flex gap-4 p-4' : ''
             }`}>
               <div className={viewMode === 'list' ? 'w-32 h-32 flex-shrink-0' : 'aspect-square'}>
@@ -274,10 +277,10 @@ export default function ImageReview({ promptId, originalPrompt, onBack }: ImageR
                     <span className="text-sm font-medium">{(pin.match_score * 100).toFixed(0)}%</span>
                   </div>
                 </div>
-                <h3 className="font-semibold text-gray-900 mb-1 line-clamp-2">{pin.title}</h3>
-                <p className="text-sm text-gray-600 mb-3 line-clamp-2">{pin.description}</p>
-                <div className="bg-gray-50 rounded-lg p-3 mb-3">
-                  <p className="text-xs text-gray-700">{pin.ai_explanation}</p>
+                <h3 className="font-semibold text-gray-900 dark:text-white mb-1 line-clamp-2">{pin.title}</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-300 mb-3 line-clamp-2">{pin.description}</p>
+                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 mb-3">
+                  <p className="text-xs text-gray-700 dark:text-gray-300">{pin.ai_explanation}</p>
                 </div>
                 <div className="flex items-center justify-between">
                   <ScoreBar score={pin.match_score} className="flex-1" />
@@ -285,7 +288,7 @@ export default function ImageReview({ promptId, originalPrompt, onBack }: ImageR
                     href={pin.pin_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="ml-3 p-2 text-gray-400 hover:text-emerald-600 transition-colors"
+                    className="ml-3 p-2 text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
                   >
                     <ExternalLink className="w-4 h-4" />
                   </a>
@@ -297,11 +300,11 @@ export default function ImageReview({ promptId, originalPrompt, onBack }: ImageR
 
         {filteredPins.length === 0 && (
           <div className="text-center py-12">
-            <div className="text-gray-400 mb-4">
+            <div className="text-gray-400 dark:text-gray-500 mb-4">
               <Filter className="w-12 h-12 mx-auto" />
             </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No results found</h3>
-            <p className="text-gray-600">Try adjusting your filters to see more results.</p>
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No results found</h3>
+            <p className="text-gray-600 dark:text-gray-300">Try adjusting your filters to see more results.</p>
           </div>
         )}
       </div>
