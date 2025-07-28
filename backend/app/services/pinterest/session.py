@@ -173,6 +173,26 @@ class PinterestSession:
                                 if href:
                                     pin_url = f"https://pinterest.com{href}" if href.startswith("/") else href
                             
+                            # Get description from image alt attribute
+                            description = None
+                            title = None
+                            try:
+                                img_element = await pin.query_selector("img")
+                                if img_element:
+                                    alt_text = await img_element.get_attribute("alt")
+                                    if alt_text and alt_text.strip():
+                                        # Clean up Pinterest's "This may contain: " prefix
+                                        description = alt_text.strip()
+                                        if description.startswith("This may contain: "):
+                                            description = description.replace("This may contain: ", "", 1)
+                                        
+                                        # For now, use cleaned alt text as title if it's short enough
+                                        # TODO: Implement proper h1 extraction later
+                                        if len(description) < 50 and not any(word in description.lower() for word in ['may contain', 'image', 'photo', 'picture']):
+                                            title = description
+                            except Exception:
+                                pass
+                            
                             # Get image URL
                             image_url = None
                             # Try to get srcset first for higher quality
@@ -215,6 +235,8 @@ class PinterestSession:
                                     pin_data.append({
                                         'image_url': image_url,
                                         'pin_url': pin_url,
+                                        'title': title,  # From h1 on pin page
+                                        'description': description,  # From alt text, cleaned
                                         'metadata': {
                                             'collected_at': datetime.now().isoformat()
                                         }
