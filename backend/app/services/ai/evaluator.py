@@ -3,6 +3,7 @@ from bson import ObjectId
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent
 from pydantic_ai.models.openai import OpenAIModel
+from pydantic_ai.providers.openai import OpenAIProvider
 
 from app.config import settings
 from app.database import PromptDB, PinDB
@@ -19,7 +20,10 @@ class AIEvaluator:
         if not settings.OPENAI_API_KEY:
             raise ValueError("OPENAI_API_KEY is required for AI evaluation")
         
-        self.model = OpenAIModel('gpt-4o', api_key=settings.OPENAI_API_KEY)
+        # Create OpenAI provider with API key
+        provider = OpenAIProvider(api_key=settings.OPENAI_API_KEY)
+        self.model = OpenAIModel('gpt-4o', provider=provider)
+        
         self.agent = Agent(
             model=self.model,
             result_type=PinValidation,

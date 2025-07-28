@@ -72,6 +72,7 @@ class PinDB(BaseDB):
                 pin_url=pin_data["pin_url"],
                 title=pin_data.get("title"),
                 description=pin_data.get("description"),
+                status="ready",  # Set initial status as ready for AI validation
                 metadata=PinMetadata(collected_at=collected_at)
             )
             pin_docs.append(pin_schema.dict())

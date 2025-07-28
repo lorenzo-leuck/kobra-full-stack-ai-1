@@ -5,6 +5,7 @@ Provides functions to clear/reset the database collections
 """
 
 import sys
+import argparse
 from pathlib import Path
 
 # Add app directory to path for imports
@@ -31,27 +32,24 @@ def clear_database():
         print("\n✅ Database is already empty!")
         return
     
-    # Confirm deletion
-    print(f"\n⚠️  This will permanently delete ALL data from the database!")
-    confirm = input("Type 'DELETE' to confirm: ")
-    
-    if confirm != 'DELETE':
-        print("❌ Operation cancelled")
-        return
+    print(f"\n⚠️  Deleting ALL data from database...")
     
     # Delete all documents
     print("\n🗑️  Deleting documents...")
     
     # Delete pins
-    pins_result = PinDB.collection.delete_many({})
+    pins_collection = PinDB.get_collection()
+    pins_result = pins_collection.delete_many({})
     print(f"  Deleted {pins_result.deleted_count} pins")
     
     # Delete sessions
-    sessions_result = SessionDB.collection.delete_many({})
+    sessions_collection = SessionDB.get_collection()
+    sessions_result = sessions_collection.delete_many({})
     print(f"  Deleted {sessions_result.deleted_count} sessions")
     
     # Delete prompts
-    prompts_result = PromptDB.collection.delete_many({})
+    prompts_collection = PromptDB.get_collection()
+    prompts_result = prompts_collection.delete_many({})
     print(f"  Deleted {prompts_result.deleted_count} prompts")
     
     # Verify deletion
@@ -128,8 +126,44 @@ def show_database_status():
             print(f"  {i}. {text}... ({status}) - {created_at}")
 
 def main():
-    """Main function with menu options"""
+    """Main function with menu options or command line arguments"""
     
+    parser = argparse.ArgumentParser(
+        description="Database Management Tool",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""Examples:
+  python3 scripts/database.py --clear     # Clear database immediately
+  python3 scripts/database.py --status    # Show database status
+  python3 scripts/database.py             # Interactive menu"""
+    )
+    
+    parser.add_argument(
+        "--clear", 
+        action="store_true", 
+        help="Clear all database collections immediately"
+    )
+    parser.add_argument(
+        "--status", 
+        action="store_true", 
+        help="Show database status and exit"
+    )
+    
+    args = parser.parse_args()
+    
+    # Handle command line arguments
+    if args.clear:
+        print("🗄️  Database Management Tool - Clear Mode")
+        print("=" * 50)
+        clear_database()
+        return
+    
+    if args.status:
+        print("🗄️  Database Management Tool - Status Mode")
+        print("=" * 50)
+        show_database_status()
+        return
+    
+    # Interactive menu mode
     print("🗄️  Database Management Tool")
     print("=" * 50)
     print("1. Show database status")

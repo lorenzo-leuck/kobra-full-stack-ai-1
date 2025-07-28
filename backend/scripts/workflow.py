@@ -21,8 +21,8 @@ from download import export_pins_to_json, download_from_json
 load_dotenv()
 
 # Configuration
-PINTEREST_PROMPT = "retro future bam bam"
-NUM_IMAGES = 10
+PINTEREST_PROMPT = "the jetsons"
+NUM_IMAGES = 20
 
 async def run_complete_workflow():
     """Run the complete Pinterest + AI validation workflow"""
@@ -147,6 +147,19 @@ async def download_workflow_results(prompt_id: ObjectId, prompt_text: str):
     # Prepare pin data for export with pin IDs as identifiers
     export_data = []
     for pin in all_pins:
+        # Handle metadata with datetime serialization
+        metadata = pin.get('metadata', {})
+        if isinstance(metadata, dict):
+            # Convert datetime objects to strings
+            serializable_metadata = {}
+            for key, value in metadata.items():
+                if hasattr(value, 'isoformat'):  # datetime object
+                    serializable_metadata[key] = value.isoformat()
+                else:
+                    serializable_metadata[key] = value
+        else:
+            serializable_metadata = metadata
+        
         pin_data = {
             'pin_id': str(pin['_id']),
             'image_url': pin['image_url'],
@@ -156,7 +169,7 @@ async def download_workflow_results(prompt_id: ObjectId, prompt_text: str):
             'status': pin.get('status', 'unknown'),
             'match_score': pin.get('match_score'),
             'ai_explanation': pin.get('ai_explanation'),
-            'metadata': pin.get('metadata', {})
+            'metadata': serializable_metadata
         }
         export_data.append(pin_data)
     
