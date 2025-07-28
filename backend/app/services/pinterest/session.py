@@ -1,7 +1,7 @@
 import os
 import asyncio
+from datetime import datetime
 from playwright.async_api import async_playwright
-from .scrapper import download_images, extract_image_urls_from_pins
 
 class PinterestSession:
     def __init__(self, username=None, password=None):
@@ -147,11 +147,11 @@ class PinterestSession:
             except:
                 print("Feed elements not found immediately, continuing anyway...")
             
-            img_urls = []  # Use list to preserve order
+            pin_data = []  # Store pin data with URLs and metadata
             scroll_attempts = 0
             
-            while len(img_urls) < num_images and scroll_attempts < scroll_attempts_limit:
-                print(f"Collecting images: {len(img_urls)}/{num_images}")
+            while len(pin_data) < num_images and scroll_attempts < scroll_attempts_limit:
+                print(f"Collecting images: {len(pin_data)}/{num_images}")
                 
                 # Find pin wrappers in the feed
                 pins = await self.page.query_selector_all("div[data-test-id='pinWrapper']")
@@ -159,12 +159,22 @@ class PinterestSession:
                 
                 # Extract URLs from pins in order, avoiding duplicates
                 for pin in pins:
-                    if len(img_urls) >= num_images:
+                    if len(pin_data) >= num_images:
                         break
                         
                     try:
                         image_element = await pin.query_selector("img")
                         if image_element:
+                            # Get pin URL (Pinterest link)
+                            pin_url = None
+                            pin_link = await pin.query_selector("a[href*='/pin/']")
+                            if pin_link:
+                                href = await pin_link.get_attribute("href")
+                                if href:
+                                    pin_url = f"https://pinterest.com{href}" if href.startswith("/") else href
+                            
+                            # Get image URL
+                            image_url = None
                             # Try to get srcset first for higher quality
                             srcset = await image_element.get_attribute("srcset")
                             if srcset:
@@ -185,8 +195,8 @@ class PinterestSession:
                                         except ValueError:
                                             pass
                                             
-                                if highest_res_url and highest_res_url.startswith("http") and highest_res_url not in img_urls:
-                                    img_urls.append(highest_res_url)
+                                if highest_res_url and highest_res_url.startswith("http"):
+                                    image_url = highest_res_url
                             else:
                                 # Fallback to src attribute
                                 src = await image_element.get_attribute("src")
@@ -196,17 +206,28 @@ class PinterestSession:
                                         src = src.replace("236x", "736x")
                                     elif "474x" in src:
                                         src = src.replace("474x", "736x")
-                                    if src not in img_urls:
-                                        img_urls.append(src)
+                                    image_url = src
+                            
+                            # Only add if we have both URLs and haven't seen this image before
+                            if image_url and pin_url:
+                                # Check for duplicates
+                                if not any(p['image_url'] == image_url for p in pin_data):
+                                    pin_data.append({
+                                        'image_url': image_url,
+                                        'pin_url': pin_url,
+                                        'metadata': {
+                                            'collected_at': datetime.now().isoformat()
+                                        }
+                                    })
                     except Exception as e:
                         print(f"Error processing pin: {e}")
                         continue
                 
-                if len(img_urls) >= num_images:
+                if len(pin_data) >= num_images:
                     break
                     
                 # Only scroll if we need more images
-                print(f"Found {len(img_urls)} images so far, scrolling for more...")
+                print(f"Found {len(pin_data)} images so far, scrolling for more...")
                 await self.page.evaluate("window.scrollBy(0, 1000)")
                 await asyncio.sleep(2)
                 scroll_attempts += 1
@@ -215,15 +236,10 @@ class PinterestSession:
             print(f"Error during feed scraping: {e}")
             return []
         
-        img_urls_list = img_urls[:num_images]  # Already a list, just slice
-        print(f"\nTotal images found in feed: {len(img_urls_list)}")
+        pin_data_list = pin_data[:num_images]  # Already a list, just slice
+        print(f"\nTotal images found in feed: {len(pin_data_list)}")
         
-        if download and img_urls_list:
-            print("Downloading images...")
-            download_images(img_urls_list, output_name)
-            print("Download completed.")
-        
-        return img_urls_list
+        return pin_data_list
     
     async def close(self):
         if self.browser:

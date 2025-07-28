@@ -58,16 +58,20 @@ async def main_async():
         
         # Scrape after warm-up
         print("\n=== SCRAPING PHASE ===")
-        img_urls = await warmup.scrape_after_warmup(
+        pin_data = await warmup.scrape_after_warmup(
             num_images=args.num_images,
-            download=not args.no_download,
+            download=False,  # Service no longer handles downloads/exports
             output_name=args.output_name
         )
         
-        print(f"\nCompleted! Found {len(img_urls)} images.")
+        print(f"\nCompleted! Found {len(pin_data)} pins with Pinterest URLs.")
+        
+        # Export JSON metadata if not disabled
         if not args.no_download:
-            folder_name = args.output_name or f"warmup_{args.prompt.replace(' ', '_')}"
-            print(f"Images saved to: downloaded_images/{folder_name}/")
+            from download import export_pins_to_json
+            prompt_name = args.output_name or f"warmup_{args.prompt}"
+            json_file = export_pins_to_json(pin_data, prompt_name)
+            print(f"Pinterest URLs ready for AI validation!")
         
     except Exception as e:
         print(f"Error: {e}")
