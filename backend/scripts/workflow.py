@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Main Pinterest Workflow Script
-Tests the complete Pinterest + AI validation workflow
+Runs the complete Pinterest + AI validation workflow + downloads results
 """
 
 import asyncio
@@ -16,6 +16,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 from app.services.workflow.main import WorkflowOrchestrator
 from app.database import PromptDB, PinDB
 from app.config import settings
+from download import export_pins_to_json, download_from_json
 
 load_dotenv()
 
@@ -125,7 +126,92 @@ async def run_complete_workflow():
         json.dump(results, f, indent=2)
     
     print(f"\n💾 Test results saved to workflow_test_results.json")
-    print(f"🎉 Complete workflow test finished successfully!")
+    
+    # Phase 3: Download Results
+    print("\n💾 PHASE 3: Download Results")
+    print("-" * 50)
+    
+    await download_workflow_results(prompt_id, PINTEREST_PROMPT)
+    
+    print(f"🎉 Complete workflow finished successfully!")
+
+async def download_workflow_results(prompt_id: ObjectId, prompt_text: str):
+    """Download and export workflow results with pin IDs as filenames"""
+    
+    # Get all pins from database
+    all_pins = PinDB.get_pins_by_prompt(prompt_id)
+    if not all_pins:
+        print("No pins found to download")
+        return
+    
+    # Prepare pin data for export with pin IDs as identifiers
+    export_data = []
+    for pin in all_pins:
+        pin_data = {
+            'pin_id': str(pin['_id']),
+            'image_url': pin['image_url'],
+            'pin_url': pin['pin_url'],
+            'title': pin.get('title', 'No title'),
+            'description': pin.get('description', 'No description'),
+            'status': pin.get('status', 'unknown'),
+            'match_score': pin.get('match_score'),
+            'ai_explanation': pin.get('ai_explanation'),
+            'metadata': pin.get('metadata', {})
+        }
+        export_data.append(pin_data)
+    
+    # Export to JSON
+    print(f"Exporting {len(export_data)} pins to JSON...")
+    json_file = export_pins_to_json(export_data, prompt_text)
+    print(f"✅ JSON exported: {json_file}")
+    
+    # Download images with pin IDs as filenames
+    print(f"\nDownloading {len(export_data)} images with pin IDs as filenames...")
+    await download_images_with_pin_ids(export_data, prompt_text)
+    
+    print(f"✅ Download phase completed!")
+    print(f"📁 Check exports/{prompt_text.replace(' ', '_')}/ for results")
+
+async def download_images_with_pin_ids(pin_data: list, prompt_text: str):
+    """Download images using pin IDs as filenames"""
+    import urllib.request
+    from concurrent.futures import ThreadPoolExecutor
+    
+    # Create output directory
+    safe_prompt = prompt_text.replace(' ', '_').replace('/', '_')
+    output_dir = Path("exports") / safe_prompt
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    def download_pin_image(pin):
+        """Download single pin image with pin ID as filename"""
+        try:
+            pin_id = pin['pin_id']
+            image_url = pin['image_url']
+            
+            # Use pin ID as filename
+            filename = f"{pin_id}.jpg"
+            file_path = output_dir / filename
+            
+            urllib.request.urlretrieve(image_url, file_path)
+            return f"Downloaded: {filename}"
+        except Exception as e:
+            return f"Failed to download {pin.get('pin_id', 'unknown')}: {e}"
+    
+    # Download images concurrently
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        futures = [executor.submit(download_pin_image, pin) for pin in pin_data]
+        
+        successful_downloads = 0
+        for future in futures:
+            try:
+                result = future.result()
+                if "Downloaded:" in result:
+                    successful_downloads += 1
+                print(result)
+            except Exception as e:
+                print(f"Download error: {e}")
+    
+    print(f"\n✅ Downloaded {successful_downloads}/{len(pin_data)} images to: {output_dir}/")
 
 if __name__ == "__main__":
     # Run the complete Pinterest + AI validation workflow
