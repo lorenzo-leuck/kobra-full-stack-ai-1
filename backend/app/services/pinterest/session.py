@@ -173,9 +173,12 @@ class PinterestSession:
                                 if href:
                                     pin_url = f"https://pinterest.com{href}" if href.startswith("/") else href
                             
+                            # Title extraction: rich-pin-information only exists in pin detail view, not feed
+                            # For now, titles will be null - can be populated later via pin page navigation if needed
+                            title = None
+                            
                             # Get description from image alt attribute
                             description = None
-                            title = None
                             try:
                                 img_element = await pin.query_selector("img")
                                 if img_element:
@@ -185,11 +188,6 @@ class PinterestSession:
                                         description = alt_text.strip()
                                         if description.startswith("This may contain: "):
                                             description = description.replace("This may contain: ", "", 1)
-                                        
-                                        # For now, use cleaned alt text as title if it's short enough
-                                        # TODO: Implement proper h1 extraction later
-                                        if len(description) < 50 and not any(word in description.lower() for word in ['may contain', 'image', 'photo', 'picture']):
-                                            title = description
                             except Exception:
                                 pass
                             
@@ -262,6 +260,49 @@ class PinterestSession:
         print(f"\nTotal images found in feed: {len(pin_data_list)}")
         
         return pin_data_list
+    
+    async def enrich_with_titles(self, pin_data_list):
+        """Navigate to each pin URL to extract h1 titles"""
+        if not pin_data_list:
+            return pin_data_list
+            
+        print(f"\nEnriching {len(pin_data_list)} pins with titles...")
+        enriched_data = []
+        
+        for i, pin_data in enumerate(pin_data_list):
+            try:
+                print(f"Fetching title {i+1}/{len(pin_data_list)}...")
+                
+                # Navigate to pin page
+                await self.page.goto(pin_data['pin_url'], timeout=15000)
+                await asyncio.sleep(2)
+                
+                # Extract title from rich-pin-information
+                title = None
+                try:
+                    title_element = await self.page.query_selector('div[data-test-id="rich-pin-information"] h1')
+                    if title_element:
+                        title = await title_element.text_content()
+                        title = title.strip() if title else None
+                        print(f"  Found: {title}")
+                    else:
+                        print("  No title found")
+                except Exception:
+                    print("  Title extraction failed")
+                
+                # Update pin data with title
+                enriched_pin = pin_data.copy()
+                enriched_pin['title'] = title
+                enriched_data.append(enriched_pin)
+                
+            except Exception as e:
+                print(f"  Error fetching title for pin {i+1}: {e}")
+                # Keep original data without title
+                enriched_data.append(pin_data)
+                continue
+        
+        print(f"Title enrichment completed!")
+        return enriched_data
     
     async def close(self):
         if self.browser:

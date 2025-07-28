@@ -66,14 +66,20 @@ async def main_async():
         
         print(f"\nCompleted! Found {len(pin_data)} pins with Pinterest URLs.")
         
+        # Enrich with titles by visiting each pin page
+        print("\n=== TITLE ENRICHMENT PHASE ===")
+        enriched_pin_data = await warmup.enrich_with_titles(pin_data)
+        
+        print(f"\nTitle enrichment completed! Using enriched data for export.")
+        
         # Export JSON metadata and download images if not disabled
         if not args.no_download:
             from download import export_pins_to_json, download_from_json
             prompt_name = args.output_name or f"warmup_{args.prompt}"
             
-            # Export JSON metadata
-            json_file = export_pins_to_json(pin_data, prompt_name)
-            print(f"Pinterest URLs ready for AI validation!")
+            # Export JSON metadata with enriched titles
+            json_file = export_pins_to_json(enriched_pin_data, prompt_name)
+            print(f"Pinterest URLs with titles ready for AI validation!")
             
             # Download images for testing
             print("\nDownloading images for testing...")
