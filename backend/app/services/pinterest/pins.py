@@ -30,7 +30,7 @@ class PinterestPins:
         
         pin_data_list = []
         
-        for i, pin in enumerate(pins[:num_images]):
+        for i, pin in enumerate(pins):
             try:
                 # Extract image URL (Pinterest CDN URL for AI validation)
                 image_element = await pin.query_selector("img")
