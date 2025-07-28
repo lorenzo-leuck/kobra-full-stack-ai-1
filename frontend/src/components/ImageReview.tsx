@@ -4,20 +4,10 @@ import StatusBadge from './StatusBadge';
 import ScoreBar from './ScoreBar';
 import LoadingSpinner from './LoadingSpinner';
 import ThemeToggle from './ThemeToggle';
+import { ApiService } from '../services/api';
+import type { Pin } from '../types';
 
-interface Pin {
-  _id: string;
-  image_url: string;
-  pin_url: string;
-  title: string;
-  description: string;
-  match_score: number;
-  status: 'approved' | 'disqualified';
-  ai_explanation: string;
-  metadata: {
-    collected_at: string;
-  };
-}
+
 
 interface ImageReviewProps {
   promptId: string;
@@ -34,93 +24,21 @@ export default function ImageReview({ promptId, originalPrompt, onBack }: ImageR
   const [scoreThreshold, setScoreThreshold] = useState(0.0);
 
   useEffect(() => {
-    // TODO: Replace with actual API call
-    // const fetchPins = async () => {
-    //   try {
-    //     const response = await fetch(`/api/prompts/${promptId}/pins`);
-    //     const data = await response.json();
-    //     setPins(data.pins);
-    //   } catch (error) {
-    //     console.error('Failed to fetch pins:', error);
-    //   } finally {
-    //     setLoading(false);
-    //   }
-    // };
-
-    // Simulate API response with mock data
-    const mockPins: Pin[] = [
-      {
-        _id: '1',
-        image_url: 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=400',
-        pin_url: 'https://pinterest.com/pin/1',
-        title: 'Modern Industrial Home Office Setup',
-        description: 'Clean lines and industrial elements create the perfect workspace',
-        match_score: 0.92,
-        status: 'approved',
-        ai_explanation: 'Excellent match with industrial elements, clean desk setup, and modern aesthetic.',
-        metadata: { collected_at: new Date().toISOString() }
-      },
-      {
-        _id: '2',
-        image_url: 'https://images.unsplash.com/photo-1541558869434-2840d308329a?w=400',
-        pin_url: 'https://pinterest.com/pin/2',
-        title: 'Cozy Reading Nook with Industrial Touches',
-        description: 'Warm lighting and metal accents in a comfortable corner',
-        match_score: 0.78,
-        status: 'approved',
-        ai_explanation: 'Good match with cozy atmosphere and some industrial elements like metal fixtures.',
-        metadata: { collected_at: new Date().toISOString() }
-      },
-      {
-        _id: '3',
-        image_url: 'https://images.unsplash.com/photo-1560472354-b33ff0c44a43?w=400',
-        pin_url: 'https://pinterest.com/pin/3',
-        title: 'Bright Modern Kitchen',
-        description: 'All white kitchen with marble countertops',
-        match_score: 0.23,
-        status: 'disqualified',
-        ai_explanation: 'Does not match the industrial home office criteria - this is a kitchen with no industrial elements.',
-        metadata: { collected_at: new Date().toISOString() }
-      },
-      {
-        _id: '4',
-        image_url: 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=400',
-        pin_url: 'https://pinterest.com/pin/4',
-        title: 'Industrial Desk with Exposed Brick',
-        description: 'Raw materials and functional design for productivity',
-        match_score: 0.95,
-        status: 'approved',
-        ai_explanation: 'Perfect match with exposed brick, industrial desk, and office functionality.',
-        metadata: { collected_at: new Date().toISOString() }
-      },
-      {
-        _id: '5',
-        image_url: 'https://images.unsplash.com/photo-1541558869434-2840d308329a?w=400',
-        pin_url: 'https://pinterest.com/pin/5',
-        title: 'Vintage Office Chair',
-        description: 'Classic leather chair with metal frame',
-        match_score: 0.67,
-        status: 'approved',
-        ai_explanation: 'Moderate match - has industrial metal frame but lacks the complete office context.',
-        metadata: { collected_at: new Date().toISOString() }
-      },
-      {
-        _id: '6',
-        image_url: 'https://images.unsplash.com/photo-1560472354-b33ff0c44a43?w=400',
-        pin_url: 'https://pinterest.com/pin/6',
-        title: 'Colorful Art Studio',
-        description: 'Creative workspace with bright colors and art supplies',
-        match_score: 0.34,
-        status: 'disqualified',
-        ai_explanation: 'Poor match - too colorful and artistic, lacks industrial aesthetic and office functionality.',
-        metadata: { collected_at: new Date().toISOString() }
+    const fetchPins = async () => {
+      try {
+        console.log('🖼️ Fetching pins for prompt:', promptId);
+        const response = await ApiService.getPins(promptId);
+        console.log('🖼️ Received pins:', response);
+        setPins(response.pins);
+      } catch (error) {
+        console.error('❌ Failed to fetch pins:', error);
+        // TODO: Add proper error handling/display
+      } finally {
+        setLoading(false);
       }
-    ];
+    };
 
-    setTimeout(() => {
-      setPins(mockPins);
-      setLoading(false);
-    }, 1000);
+    fetchPins();
   }, [promptId]);
 
   useEffect(() => {

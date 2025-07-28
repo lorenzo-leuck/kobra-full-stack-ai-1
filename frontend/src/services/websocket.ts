@@ -23,6 +23,8 @@ interface SessionUpdate {
 
 type WebSocketMessage = StatusUpdate | SessionUpdate;
 
+const WS_BASE_URL = 'ws://localhost:8000';
+
 export class WebSocketService {
   private ws: WebSocket | null = null;
   private promptId: string | null = null;
@@ -35,34 +37,37 @@ export class WebSocketService {
     return new Promise((resolve, reject) => {
       this.promptId = promptId;
       
-      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
-      const wsUrl = apiBaseUrl.replace('http://', 'ws://').replace('https://', 'wss://').replace('/api', '') + `/api/ws/${promptId}`;
+      const wsUrl = `${WS_BASE_URL}/api/ws/${promptId}`;
+      
+      console.log('🔌 Connecting to WebSocket:', wsUrl);
 
       try {
         this.ws = new WebSocket(wsUrl);
 
         this.ws.onopen = () => {
-          console.log(`WebSocket connected for prompt ${promptId}`);
+          console.log(`🔌 WebSocket connected for prompt ${promptId}`);
           this.reconnectAttempts = 0;
           resolve();
         };
 
         this.ws.onmessage = (event) => {
           try {
+            console.log('📨 WebSocket message received:', event.data);
             const message: WebSocketMessage = JSON.parse(event.data);
+            console.log('📨 Parsed message:', message);
             this.notifyListeners(message);
           } catch (error) {
-            console.error('Failed to parse WebSocket message:', error);
+            console.error('❌ Failed to parse WebSocket message:', error, event.data);
           }
         };
 
         this.ws.onclose = (event) => {
-          console.log('WebSocket connection closed:', event.code, event.reason);
+          console.log('🔌 WebSocket connection closed:', event.code, event.reason);
           this.handleReconnect();
         };
 
         this.ws.onerror = (error) => {
-          console.error('WebSocket error:', error);
+          console.error('❌ WebSocket error:', error);
           reject(error);
         };
 

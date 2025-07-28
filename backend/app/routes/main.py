@@ -1,4 +1,6 @@
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect, BackgroundTasks
+from fastapi.responses import JSONResponse
+from fastapi.websockets import WebSocketDisconnect
 from pydantic import BaseModel
 from bson import ObjectId
 import asyncio
@@ -37,11 +39,27 @@ async def run_complete_workflow_background(prompt_text: str, prompt_id: str):
         
         # Phase 1: Pinterest workflow
         print(f"📌 Starting Pinterest workflow phase...")
-        pinterest_result = await orchestrator.run_pinterest_workflow(
-            num_images=20,
-            headless=True
-        )
-        print(f"📌 Pinterest workflow result: {pinterest_result}")
+        
+        try:
+            # Send initial status update
+            await orchestrator.setStatus("running", "Starting Pinterest workflow", 5.0)
+            
+            pinterest_result = await orchestrator.run_pinterest_workflow(
+                num_images=20,
+                headless=True
+            )
+            print(f"📌 Pinterest workflow result: {pinterest_result}")
+            
+        except Exception as pinterest_error:
+            print(f"💥 Pinterest workflow failed with exception: {type(pinterest_error).__name__}: {str(pinterest_error)}")
+            import traceback
+            print(f"📋 Pinterest workflow traceback:")
+            traceback.print_exc()
+            
+            # Update status to show error
+            await orchestrator.setStatus("failed", f"Pinterest workflow failed: {str(pinterest_error)}", 0.0)
+            PromptDB.update_prompt_status(ObjectId(prompt_id), "error")
+            return
         
         if not pinterest_result.get('success'):
             print(f"❌ Pinterest workflow failed: {pinterest_result.get('error', 'Unknown error')}")
@@ -108,24 +126,76 @@ async def websocket_endpoint(websocket: WebSocket, prompt_id: str):
         await websocket_manager.connect(websocket, prompt_id)
         
         print(f"📡 WebSocket connected for prompt {prompt_id}")
+        print(f"📡 Active connections after connect: {len(websocket_manager.active_connections.get(prompt_id, set()))}")
+        
+        # Send current status immediately upon connection to catch up
+        try:
+            from ..database.status import StatusDB
+            from ..database.sessions import SessionDB
+            
+            # Get current status
+            status_data = StatusDB.get_workflow_progress(prompt_id)
+            if status_data:
+                print(f"📡 Sending initial status update: {status_data}")
+                await websocket_manager.send_status_update(
+                    prompt_id=prompt_id,
+                    status_data={
+                        "prompt_id": prompt_id,
+                        "overall_status": status_data.get('overall_status', 'pending'),
+                        "current_step": status_data.get('current_step', 0),
+                        "total_steps": status_data.get('total_steps', 0),
+                        "progress": status_data.get('progress', 0),
+                        "messages": status_data.get('messages', [])
+                    }
+                )
+            
+            # Send current session updates
+            sessions = SessionDB.get_sessions_by_prompt(ObjectId(prompt_id))
+            for session in sessions:
+                session_data = {
+                    "prompt_id": prompt_id,
+                    "session_id": str(session['_id']),
+                    "stage": session['stage'],
+                    "status": session['status'],
+                    "logs": session.get('log', [])
+                }
+                print(f"📡 Sending initial session update: {session_data}")
+                await websocket_manager.send_session_update(
+                    prompt_id=prompt_id,
+                    session_data=session_data
+                )
+                
+        except Exception as e:
+            print(f"📡 Failed to send initial status: {e}")
         
         # Keep connection alive and handle disconnection
+        print(f"📡 Starting WebSocket keep-alive loop for prompt {prompt_id}")
+        
         while True:
             try:
-                # Wait for any message (ping/pong to keep alive)
-                await websocket.receive_text()
+                print(f"📡 WebSocket waiting for messages (keeping alive) for prompt {prompt_id}")
+                print(f"📡 Current active connections: {len(websocket_manager.active_connections.get(prompt_id, set()))}")
+                
+                # Wait for messages (this keeps the connection alive)
+                message = await websocket.receive_text()
+                print(f"📡 Received WebSocket message: {message}")
+                
             except WebSocketDisconnect:
+                print(f"📡 WebSocket connection closed for prompt {prompt_id}")
                 break
             except Exception as e:
-                print(f"📡 WebSocket error: {e}")
+                print(f"📡 WebSocket connection closed for prompt {prompt_id}: {type(e).__name__}: {e}")
                 break
                 
     except Exception as e:
-        print(f"📡 WebSocket connection error: {e}")
+        print(f"📡 WebSocket error for prompt {prompt_id}: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
     finally:
-        # Disconnect from WebSocket manager
+        # Clean up connection
+        print(f"📡 Cleaning up WebSocket connection for prompt {prompt_id}")
         websocket_manager.disconnect(websocket, prompt_id)
-        print(f"📡 WebSocket disconnected for prompt {prompt_id}")
+        print(f"📡 WebSocket cleanup completed for prompt {prompt_id}")
 
 @router.get("/prompts/{prompt_id}/status")
 async def get_prompt_status(prompt_id: str):
@@ -146,36 +216,35 @@ async def get_prompt_status(prompt_id: str):
         sessions = SessionDB.get_sessions_by_prompt(ObjectId(prompt_id))
         
         # Get status
-        status_docs = StatusDB.get_status_by_prompt_id(prompt_id)
+        status_data = StatusDB.get_workflow_progress(prompt_id)
         
         # Map sessions to frontend expected format
-        stages = []
+        sessions_formatted = []
         for session in sessions:
             stage_id = session['stage']
-            stage_name = {
-                'warmup': 'Pinterest Warm-up',
-                'scraping': 'Image Collection', 
-                'validation': 'AI Validation'
-            }.get(stage_id, stage_id.title())
             
-            stages.append({
-                'id': stage_id,
-                'name': stage_name,
+            sessions_formatted.append({
+                '_id': str(session['_id']),
+                'prompt_id': prompt_id,
+                'stage': stage_id,
                 'status': session['status'],
+                'timestamp': session.get('timestamp', ''),
                 'logs': session.get('log', [])
             })
             
         # Calculate overall progress
-        overall_progress = 0
-        if status_docs:
-            status_doc = status_docs[0]
-            overall_progress = status_doc.get('progress', 0)
+        overall_progress = status_data.get('progress', 0) if status_data else 0
             
         return {
-            'prompt_id': prompt_id,
-            'status': prompt_doc['status'],
+            'prompt': {
+                '_id': prompt_id,
+                'text': prompt_doc['text'],
+                'status': prompt_doc['status'],
+                'created_at': prompt_doc.get('created_at', '')
+            },
+            'sessions': sessions_formatted,
             'overall_progress': overall_progress,
-            'stages': stages
+            'current_stage': status_data.get('overall_status', 'pending') if status_data else 'pending'
         }
         
     except Exception as e:
@@ -217,10 +286,18 @@ async def get_prompt_pins(prompt_id: str):
             }
             formatted_pins.append(formatted_pin)
             
+        # Calculate statistics
+        total_count = len(formatted_pins)
+        approved_count = len([p for p in formatted_pins if p['status'] == 'approved'])
+        disqualified_count = len([p for p in formatted_pins if p['status'] == 'disqualified'])
+        avg_score = sum(p['match_score'] for p in formatted_pins) / total_count if total_count > 0 else 0.0
+        
         return {
-            'prompt_id': prompt_id,
-            'original_prompt': prompt_doc['text'],
-            'pins': formatted_pins
+            'pins': formatted_pins,
+            'total_count': total_count,
+            'approved_count': approved_count,
+            'disqualified_count': disqualified_count,
+            'avg_score': round(avg_score, 2)
         }
         
     except Exception as e:

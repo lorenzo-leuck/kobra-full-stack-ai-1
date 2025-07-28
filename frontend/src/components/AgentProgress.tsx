@@ -52,7 +52,7 @@ export default function AgentProgress({ promptId, onComplete }: AgentProgressPro
 
   const [overallProgress, setOverallProgress] = useState(0);
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected' | 'error'>('connecting');
-  const [currentStatus, setCurrentStatus] = useState('Initializing workflow...');
+  const [currentStatus, setCurrentStatus] = useState('');
   const [isCompleted, setIsCompleted] = useState(false);
 
   useEffect(() => {
@@ -60,14 +60,16 @@ export default function AgentProgress({ promptId, onComplete }: AgentProgressPro
 
     const connectWebSocket = async () => {
       try {
+        console.log('🔄 Attempting to connect WebSocket for prompt:', promptId);
         setConnectionStatus('connecting');
         await websocketService.connect(promptId);
         
         if (mounted) {
+          console.log('✅ WebSocket connected successfully');
           setConnectionStatus('connected');
         }
       } catch (error) {
-        console.error('Failed to connect WebSocket:', error);
+        console.error('❌ Failed to connect WebSocket:', error);
         if (mounted) {
           setConnectionStatus('error');
         }
@@ -77,37 +79,57 @@ export default function AgentProgress({ promptId, onComplete }: AgentProgressPro
     const handleWebSocketMessage = (message: any) => {
       if (!mounted) return;
 
+      console.log('🎯 Processing WebSocket message:', message.type, message.data);
+
       if (message.type === 'status_update') {
         const { overall_status, progress, messages, current_step, total_steps } = message.data;
+        
+        console.log('📊 Status update:', { overall_status, progress, current_step, total_steps, messages });
         
         setOverallProgress(progress);
         setCurrentStatus(messages[messages.length - 1] || 'Processing...');
         
         if (overall_status === 'completed') {
+          console.log('🎉 Workflow completed!');
           setIsCompleted(true);
+          // If progress is 100%, transition immediately, otherwise show completion animation
+          const delay = progress >= 100 ? 500 : 1500;
           setTimeout(() => {
             if (mounted) onComplete();
-          }, 1500);
+          }, delay);
         }
 
-        // Update stages based on current step
-        setStages(prev => prev.map((stage, index) => {
-          if (index < current_step - 1) {
-            return { ...stage, status: 'completed' as const, progress: 100 };
-          } else if (index === current_step - 1) {
-            return { ...stage, status: 'active' as const, progress: (progress / total_steps) * 100 };
-          } else {
-            return { ...stage, status: 'pending' as const, progress: 0 };
-          }
-        }));
+        // Stage status is now updated via session_update messages
       }
 
       if (message.type === 'session_update') {
-        const { stage, logs } = message.data;
+        const { stage, status, logs } = message.data;
+        
+        console.log('📝 Session update:', { stage, status, logs });
         
         setStages(prev => prev.map(s => {
           if (s.id === stage) {
-            return { ...s, logs: logs || [] };
+            // Map backend status to frontend status
+            let frontendStatus: 'pending' | 'active' | 'completed' | 'failed';
+            switch (status) {
+              case 'running':
+                frontendStatus = 'active';
+                break;
+              case 'completed':
+                frontendStatus = 'completed';
+                break;
+              case 'failed':
+                frontendStatus = 'failed';
+                break;
+              default:
+                frontendStatus = 'pending';
+            }
+            
+            return { 
+              ...s, 
+              status: frontendStatus,
+              logs: logs || [] 
+            };
           }
           return s;
         }));
@@ -118,8 +140,7 @@ export default function AgentProgress({ promptId, onComplete }: AgentProgressPro
     const fetchInitialStatus = async () => {
       try {
         const statusData = await ApiService.getPromptStatus(promptId);
-        setOverallProgress(statusData.overall_progress);
-        setCurrentStatus(`Current stage: ${statusData.current_stage}`);
+        setOverallProgress(statusData.overall_progress || 0);
         
         // Update stages based on sessions
         if (statusData.sessions) {
@@ -129,7 +150,8 @@ export default function AgentProgress({ promptId, onComplete }: AgentProgressPro
               return {
                 ...stage,
                 status: session.status === 'completed' ? 'completed' : 
-                       session.status === 'running' ? 'active' : 'pending',
+                       session.status === 'running' ? 'active' : 
+                       session.status === 'failed' ? 'failed' : 'pending',
                 logs: session.logs || []
               };
             }
@@ -141,11 +163,15 @@ export default function AgentProgress({ promptId, onComplete }: AgentProgressPro
       }
     };
 
-    websocketService.addListener(handleWebSocketMessage);
     connectWebSocket();
+    
+    console.log('🔊 Adding WebSocket listener');
+    websocketService.addListener(handleWebSocketMessage);
+
     fetchInitialStatus();
 
     return () => {
+      console.log('🧹 Cleaning up WebSocket connection');
       mounted = false;
       websocketService.removeListener(handleWebSocketMessage);
       websocketService.disconnect();

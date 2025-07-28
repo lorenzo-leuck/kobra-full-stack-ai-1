@@ -44,7 +44,11 @@ class WebSocketManager:
             prompt_id (str): The prompt ID to send updates for
             status_data (dict): Status data to broadcast
         """
+        print(f"📡 WebSocketManager: Attempting to send status update for prompt {prompt_id}")
+        print(f"📡 WebSocketManager: Active connections: {list(self.active_connections.keys())}")
+        
         if prompt_id not in self.active_connections:
+            print(f"📡 WebSocketManager: No active connections for prompt {prompt_id}")
             return
             
         # Add timestamp to status data
@@ -82,7 +86,11 @@ class WebSocketManager:
             prompt_id (str): The prompt ID to send updates for  
             session_data (dict): Session data to broadcast
         """
+        print(f"📡 WebSocketManager: Attempting to send session update for prompt {prompt_id}")
+        print(f"📡 WebSocketManager: Active connections: {list(self.active_connections.keys())}")
+        
         if prompt_id not in self.active_connections:
+            print(f"📡 WebSocketManager: No active connections for prompt {prompt_id}")
             return
             
         # Add timestamp to session data
