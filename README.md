@@ -57,14 +57,26 @@ npm run dev
 
 The backend includes specialized scripts for Pinterest data collection:
 
-### Workflow Script
+### Workflow Script (Recommended)
 
 ```bash
 cd backend
+# Setup agent configurations (run once)
+python3 scripts/database.py --setup-agents
+
+# Clear database before new workflow (optional)
+python3 scripts/database.py --clear
+
+# Run complete workflow: Pinterest scraping + AI validation + export
 python3 scripts/workflow.py
 ```
 
-Runs the complete Pinterest workflow with database integration. Edit `pinterest_prompt` and `pinterest_number` variables in the script to configure.
+**Configuration:**
+```python
+# In scripts/workflow.py
+PINTEREST_PROMPT = "your visual prompt here"
+NUM_IMAGES = 20
+```
 
 ### Pinterest Script
 
@@ -103,15 +115,22 @@ The backend for the AI-powered Pinterest scraper system uses FastAPI, Pydantic, 
 
 **FastAPI + Python**: Backend framework chosen for high performance, easy-to-use async capabilities, automatic OpenAPI documentation, and type checking with Pydantic.
 
-**MongoDB with pymongo**: Synchronous MongoDB client for storing prompts, sessions, and pins in dedicated collections with specific schemas. Uses MongoDB ObjectId for document references and relationship management.
+**MongoDB with pymongo**: Synchronous MongoDB client for storing prompts, sessions, pins, and agent configurations in dedicated collections with specific schemas. Uses MongoDB ObjectId for document references and relationship management.
 
 **Playwright**: Headless browser automation for Pinterest scraping, simulating user behavior to align with visual prompts.
 
-**OpenAI API**: Used for evaluating image relevance to the original prompt with AI-powered scoring.
+**Pydantic AI**: Chosen over LangChain and LlamaIndex for AI integration due to its **actual structured output** rather than "wishful thinking" approaches. Provides:
+- **Type-safe AI responses**: Guaranteed structured output with Pydantic models
+- **Multimodal support**: Native image analysis with GPT-4o vision capabilities
+- **Reliable validation**: Built-in validation and error handling for AI responses
+- **Configurable settings**: Temperature, model selection, and prompt management
+- **Production-ready**: No complex chains or unreliable parsing - just clean, predictable AI integration
+
+**OpenAI GPT-4o**: Multimodal model for evaluating image-prompt matching with both visual analysis and textual context understanding.
 
 ### MongoDB Collections
 
-The application uses three MongoDB collections with the following schemas:
+The application uses four MongoDB collections with the following schemas:
 
 1. **prompts**:
    - `_id`: ObjectId - Unique identifier
@@ -134,10 +153,19 @@ The application uses three MongoDB collections with the following schemas:
    - `pin_url`: string - URL to the Pinterest pin
    - `title`: string - Pin title
    - `description`: string - Pin description
-   - `match_score`: number - AI-evaluated relevance score
-   - `status`: enum("approved", "disqualified") - Approval status
-   - `ai_explanation`: string - AI-generated explanation of match score
-   - `metadata`: object - Contains `collected_at` timestamp
+   - `match_score`: float - AI evaluation score (0.0-1.0)
+   - `status`: enum("ready", "approved", "disqualified") - Processing/evaluation status
+   - `ai_explanation`: string - AI reasoning for the score
+   - `metadata`: object - Collection metadata with timestamps
+
+4. **agents**:
+   - `_id`: ObjectId - Unique identifier
+   - `title`: string - Agent identifier (e.g., "pin-evaluator")
+   - `model`: string - AI model name (e.g., "gpt-4o")
+   - `system_prompt`: string - System prompt for the AI agent
+   - `user_prompt_template`: string - Template for user prompts with placeholders
+   - `temperature`: float - AI response temperature (0.0-2.0)
+   - `metadata`: object - Creation/update timestamps and version info
 
 ### Folder Structure
 
@@ -364,6 +392,48 @@ The Pinterest scraping system implements a sophisticated warm-up strategy to ali
 
 # Model Choice
 
+## OpenAI GPT-4o (Multimodal)
+
+**Selected Model**: `gpt-4o` with multimodal capabilities for Pinterest image evaluation.
+
+### Why GPT-4o?
+
+**Multimodal Analysis**: GPT-4o can analyze both visual content and textual metadata simultaneously, making it ideal for Pinterest pin evaluation where both image aesthetics and descriptive text matter.
+
+**Visual Understanding**: Advanced computer vision capabilities for analyzing:
+- **Style and mood**: Recognizes aesthetic patterns like "boho minimalist" or "industrial modern"
+- **Color schemes**: Understands color harmony and palette matching
+- **Composition**: Evaluates layout, balance, and visual hierarchy
+- **Objects and settings**: Identifies specific elements mentioned in prompts
+
+**Structured Output**: When combined with Pydantic AI, provides guaranteed structured responses with:
+- **Match scores**: Precise 0.0-1.0 scoring for quantitative evaluation
+- **Status classification**: Reliable "approved"/"disqualified" categorization
+- **Explanations**: Clear reasoning for evaluation decisions
+
+**Cost-Effective**: GPT-4o offers the best balance of:
+- **Performance**: High-quality multimodal analysis
+- **Speed**: Fast response times for batch processing
+- **Cost**: Reasonable pricing for image + text analysis
+
+### Configuration
+
+**Temperature**: Set to `0.3` for consistent, deterministic evaluations rather than creative responses.
+
+**System Prompt**: Optimized for Pinterest image evaluation with specific scoring guidelines:
+- 0.8-1.0: Excellent match
+- 0.6-0.79: Good match  
+- 0.4-0.59: Partial match
+- 0.2-0.39: Poor match
+- 0.0-0.19: No match
+
+**Alternative Models Considered**:
+- **GPT-4o-mini**: Lower cost but reduced visual analysis quality
+- **Claude 3.5 Sonnet**: Good multimodal but less Pinterest-specific training
+- **Gemini Pro Vision**: Competitive but more complex safety filtering
+
+**Result**: GPT-4o provides the most reliable and accurate Pinterest image evaluation for this use case.
+
 
 # Release History
 * 0.1 - First commit
@@ -371,7 +441,6 @@ The Pinterest scraping system implements a sophisticated warm-up strategy to ali
 * 0.3 - Backend setup
 * 0.4 - Docker compose setup
 * 0.5 - MongoDB schema implementation with collections for prompts, sessions, and pins
-* 0.6 - **Workflow orchestrator refactor**: Modular database layer with BaseDB + collection-specific classes, WorkflowOrchestrator with PinterestWorkflowHandler, separation of concerns, and database-driven workflow state management
 
 
 # License
