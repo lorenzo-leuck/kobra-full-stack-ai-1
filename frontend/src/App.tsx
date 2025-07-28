@@ -3,6 +3,7 @@ import PromptSubmission from './components/PromptSubmission';
 import AgentProgress from './components/AgentProgress';
 import ImageReview from './components/ImageReview';
 import ErrorBoundary from './components/ErrorBoundary';
+import { ApiService } from './services/api';
 import type { AppState } from './types';
 
 function App() {
@@ -23,12 +24,18 @@ function App() {
     setCurrentPrompt(prompt);
     setIsLoading(true);
     
-    // Simulate API response
-    const mockPromptId = `prompt_${Date.now()}`;
-    setPromptId(mockPromptId);
-    
-    setCurrentState('progress');
-    setIsLoading(false);
+    try {
+      // Call real API service
+      const response = await ApiService.submitPrompt(prompt);
+      setPromptId(response.prompt_id);
+      setCurrentState('progress');
+    } catch (error) {
+      console.error('Failed to submit prompt:', error);
+      // TODO: Add proper error handling/display
+      alert('Failed to submit prompt. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleProgressComplete = () => {

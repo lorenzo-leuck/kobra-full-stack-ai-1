@@ -1,11 +1,11 @@
 import type { Pin, Prompt, Session } from '../types';
 
-const API_BASE_URL = process.env.NODE_ENV === 'production' 
-  ? '/api' 
+const API_BASE_URL = import.meta.env.NODE_ENV === 'production' 
+  ? import.meta.env.BASE_URL 
   : 'http://localhost:8000/api';
 
 export class ApiService {
-  static async submitPrompt(text: string): Promise<{ prompt_id: string; success: boolean }> {
+  static async submitPrompt(text: string): Promise<{ prompt_id: string; status: string; message: string }> {
     const response = await fetch(`${API_BASE_URL}/prompts`, {
       method: 'POST',
       headers: {

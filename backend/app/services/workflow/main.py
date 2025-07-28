@@ -537,18 +537,18 @@ class PinterestWorkflowHandler:
         try:
             # Phase 1: Initialize session
             if self.orchestrator:
-                self.orchestrator.setStatus(1, "running", "Initializing Pinterest session and browser")
+                self.orchestrator.setStatus("running", "Initializing Pinterest session and browser", 0.0)
             
             self._log("=== INITIALIZATION PHASE ===")
             init_success = await self.initialize_session(headless=headless)
             if not init_success:
                 if self.orchestrator:
-                    self.orchestrator.setStatus(1, "failed", "Session initialization failed", error_message="Failed to initialize Pinterest session")
+                    self.orchestrator.setStatus("failed", "Session initialization failed")
                 workflow_result['error'] = "Session initialization failed"
                 return workflow_result
             
             if self.orchestrator:
-                self.orchestrator.setStatus(1, "completed", "Pinterest session initialized successfully")
+                self.orchestrator.setStatus("completed", "Pinterest session initialized successfully", 25.0)
             
             # Phase 2: Warmup (status handled by run_warmup_phase)
             self._log("=== WARMUP PHASE ===")
