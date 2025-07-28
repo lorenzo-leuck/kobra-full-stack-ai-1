@@ -198,6 +198,45 @@ The system now uses a modular workflow orchestrator that separates concerns and 
 
 **PinterestWorkflowHandler**:
 - Pinterest-specific implementation
+- Manages browser sessions, warmup, scraping, and title enrichment
+- Integrates with database layer for data persistence
+- Handles Pinterest authentication and session management
+
+## Frontend
+
+Modern React + TypeScript frontend with three-phase user experience:
+
+### Technologies
+- **React 19** + **TypeScript** - Modern React with type safety
+- **Tailwind CSS** - Utility-first styling with custom design system
+- **Lucide React** - Beautiful icon library
+- **Vite** - Fast build tool and development server
+
+### Architecture
+```
+frontend/src/
+├── components/
+│   ├── PromptSubmission.tsx    # Landing page with prompt input
+│   ├── AgentProgress.tsx       # Real-time workflow progress
+│   ├── ImageReview.tsx         # Results gallery with filtering
+│   ├── LoadingSpinner.tsx      # Reusable loading component
+│   ├── StatusBadge.tsx         # Pin approval status
+│   ├── ScoreBar.tsx           # AI match score visualization
+│   └── ErrorBoundary.tsx      # Error handling
+├── types/index.ts             # TypeScript interfaces
+└── App.tsx                    # Main application router
+```
+
+### User Flow
+1. **Prompt Submission**: User enters visual prompt with example suggestions
+2. **Agent Progress**: Real-time updates showing warmup → scraping → validation
+3. **Image Review**: Interactive gallery with filtering, statistics, and AI explanations
+
+### Design System
+- **Glass-morphism effects** with backdrop blur and semi-transparent backgrounds
+- **Gradient themes**: Purple/pink for prompts, blue/indigo for progress, emerald for results
+- **Smooth animations** and micro-interactions throughout
+- **Responsive design** optimized for desktop, tablet, and mobile
 - Manages Pinterest credentials and browser sessions
 - Orchestrates: warmup → scraping → enrichment phases
 - Logs all activities with timestamps to MongoDB
