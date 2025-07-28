@@ -1,7 +1,7 @@
 from typing import List
 from bson import ObjectId
 from pydantic import BaseModel, Field
-from pydantic_ai import Agent
+from pydantic_ai import Agent, ImageUrl
 from pydantic_ai.models.openai import OpenAIModel
 from pydantic_ai.providers.openai import OpenAIProvider
 
@@ -58,15 +58,21 @@ Provide a clear 2-3 sentence explanation focusing on both visual and textual ele
         if description:
             textual_context += f"\nPin Description: {description}"
         
-        user_prompt = f"""
+        # Create message with both image and text for multimodal analysis
+        evaluation_prompt = f"""
 Evaluate how well this image matches the prompt: "{prompt_text}"
-
-Image URL: {image_url}{textual_context}
+{textual_context}
 
 Analyze both the visual elements (style, mood, aesthetic) and the textual context (title, description) to determine the match quality. Consider how well the combination of visual and textual information aligns with the requested prompt.
 """
         
-        result = await self.agent.run(user_prompt)
+        # Send both the image and text for proper multimodal analysis
+        messages = [
+            evaluation_prompt,
+            ImageUrl(url=image_url)  # This sends the actual image for visual analysis
+        ]
+        
+        result = await self.agent.run(messages)
         return result.data
     
     async def evaluate_pins_for_prompt(self, prompt_id: ObjectId) -> dict:

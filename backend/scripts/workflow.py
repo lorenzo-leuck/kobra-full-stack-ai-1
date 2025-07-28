@@ -21,7 +21,7 @@ from download import export_pins_to_json, download_from_json
 load_dotenv()
 
 # Configuration
-PINTEREST_PROMPT = "the simpsons"
+PINTEREST_PROMPT = "futurama"
 NUM_IMAGES = 20
 
 async def run_complete_workflow():
@@ -121,11 +121,6 @@ async def run_complete_workflow():
         'disqualified_pins': disqualified_count,
         'timestamp': str(prompt_doc['created_at']) if prompt_doc else None
     }
-    
-    with open('workflow_test_results.json', 'w', encoding='utf-8') as f:
-        json.dump(results, f, indent=2)
-    
-    print(f"\n💾 Test results saved to workflow_test_results.json")
     
     # Phase 3: Download Results
     print("\n💾 PHASE 3: Download Results")
