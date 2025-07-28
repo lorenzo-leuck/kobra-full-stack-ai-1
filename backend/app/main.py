@@ -20,13 +20,9 @@ app.add_middleware(
 def root():
     return {"message": "AI Pinterest Scraper API"}
 
-
-
-# Import and include routers
-from app.routers import prompts, images, sessions
-app.include_router(prompts.router, prefix="/api")
-app.include_router(images.router, prefix="/api")  # Router prefix is /pins but file is still named images.py
-app.include_router(sessions.router, prefix="/api")
+# Import and include routes
+from app.routes.main import router as main_router
+app.include_router(main_router)
 
 if __name__ == "__main__":
     import uvicorn
