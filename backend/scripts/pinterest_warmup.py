@@ -66,12 +66,19 @@ async def main_async():
         
         print(f"\nCompleted! Found {len(pin_data)} pins with Pinterest URLs.")
         
-        # Export JSON metadata if not disabled
+        # Export JSON metadata and download images if not disabled
         if not args.no_download:
-            from download import export_pins_to_json
+            from download import export_pins_to_json, download_from_json
             prompt_name = args.output_name or f"warmup_{args.prompt}"
+            
+            # Export JSON metadata
             json_file = export_pins_to_json(pin_data, prompt_name)
             print(f"Pinterest URLs ready for AI validation!")
+            
+            # Download images for testing
+            print("\nDownloading images for testing...")
+            download_from_json(json_file)
+            print("Images downloaded successfully!")
         
     except Exception as e:
         print(f"Error: {e}")

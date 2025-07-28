@@ -69,12 +69,12 @@ def download_from_json(json_file_path, output_folder=None):
         print("No pin data found in JSON file")
         return
     
-    # Determine output directory
+    # Determine output directory - use exports folder to match JSON location
     if output_folder:
-        output_dir = Path("downloaded_images") / output_folder
+        output_dir = Path("exports") / output_folder
     else:
-        # Use the same name as the JSON file
-        output_dir = Path("downloaded_images") / json_path.stem.replace("_metadata", "")
+        # Use the same directory as the JSON file
+        output_dir = json_path.parent
     
     output_dir.mkdir(parents=True, exist_ok=True)
     
