@@ -87,7 +87,7 @@ export default function AgentProgress({ promptId, onComplete }: AgentProgressPro
         console.log('📊 Status update:', { overall_status, progress, current_step, total_steps, messages });
         
         setOverallProgress(progress);
-        setCurrentStatus(messages[messages.length - 1] || 'Processing...');
+        setCurrentStatus(messages[messages.length - 1] || 'Processing...1');
         
         if (overall_status === 'completed') {
           console.log('🎉 Workflow completed!');

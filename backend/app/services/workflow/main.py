@@ -53,7 +53,10 @@ class WorkflowOrchestrator:
         
         try:
             from ...database.status import StatusDB
-            from ...services.websocket import websocket_manager
+            from app.services.websocket import websocket_manager
+            
+            # Debug: Verify same WebSocketManager instance
+            print(f"📡 WORKFLOW WebSocketManager instance ID: {id(websocket_manager)}")
             
             # Update status in database
             StatusDB.update_step_status(
@@ -97,14 +100,19 @@ class WorkflowOrchestrator:
         if not self.prompt_id:
             return
         try:
-            from ...services.websocket import websocket_manager
+            from app.services.websocket import websocket_manager
+            from ...database.sessions import SessionDB
+            
+            # Get current session logs
+            session = SessionDB.get_session(self.current_session_id)
+            session_logs = session.get('log', []) if session else []
             
             session_data = {
                 "prompt_id": str(self.prompt_id),
                 "session_id": str(self.current_session_id),
                 "stage": stage,
                 "status": status,
-                "logs": logs
+                "logs": session_logs
             }
             
             print(f"📡 Sending WebSocket session update for prompt {self.prompt_id}: {session_data}")
@@ -244,22 +252,22 @@ class WorkflowOrchestrator:
             self.current_session_id = session_id
             
             # Step: Initialization
-            self.setStatus("running", "Initializing AI validation system")
+            await self.setStatus("running", "Initializing AI validation system")
             self._log("=== AI VALIDATION PHASE ===")
             self._log(f"Starting AI validation for prompt: {prompt_doc['text']}")
             
             # Initialize AI evaluator
             evaluator = AIEvaluator()
-            self.setStatus("completed", "AI validation system initialized", progress_percentage=100.0)
+            await self.setStatus("completed", "AI validation system initialized", progress_percentage=100.0)
             
             # Step: Evaluation
-            self.setStatus("running", "Evaluating pins with AI model")
+            await self.setStatus("running", "Evaluating pins with AI model")
             result = await evaluator.evaluate_pins_for_prompt(prompt_id)
-            self.setStatus("completed", f"Evaluated {result.get('evaluated_count', 0)} pins", progress_percentage=100.0)
+            await self.setStatus("completed", f"Evaluated {result.get('evaluated_count', 0)} pins", progress_percentage=100.0)
             
             # Step: Completion
             if result.get("success"):
-                self.setStatus("running", "Finalizing validation results")
+                await self.setStatus("running", "Finalizing validation results")
                 self._log(f"AI validation completed successfully")
                 self._log(f"Results: {result['approved_count']} approved, {result['disqualified_count']} disqualified")
                 
@@ -272,7 +280,7 @@ class WorkflowOrchestrator:
                 session_logs = session_data.get('log', []) if session_data else []
                 await self._send_session_update("validation", "completed", session_logs)
                 
-                self.setStatus("completed", f"Validation completed: {result['approved_count']} approved, {result['disqualified_count']} disqualified", 
+                await self.setStatus("completed", f"Validation completed: {result['approved_count']} approved, {result['disqualified_count']} disqualified", 
                              progress_percentage=100.0)
                 
                 self._log(f"AI validation completed: {result['evaluated_count']} pins evaluated")
@@ -288,7 +296,7 @@ class WorkflowOrchestrator:
                 }
             else:
                 # Failed
-                self.setStatus("failed", "AI validation failed")
+                await self.setStatus("failed", "AI validation failed")
                 
                 # Update session status to failed
                 SessionDB.update_session_status(session_id, "failed")

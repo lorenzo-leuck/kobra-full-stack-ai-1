@@ -1,6 +1,14 @@
 import type { Pin, Prompt, Session } from '../types';
 
-const API_BASE_URL = 'http://localhost:8000/api';
+// Dynamically use current hostname (works for Docker + dev)
+const hostname = window.location.hostname;
+const API_BASE_URL = `http://${hostname}:8000/api`;
+
+console.log('🔍 API configuration:', {
+  hostname: hostname,
+  baseUrl: API_BASE_URL,
+  isDocker: hostname !== 'localhost' && hostname !== '127.0.0.1'
+});
 
 export class ApiService {
   static async submitPrompt(text: string): Promise<{ prompt_id: string; status: string; message: string }> {

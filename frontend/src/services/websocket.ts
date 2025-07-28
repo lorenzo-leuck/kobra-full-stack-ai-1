@@ -23,7 +23,16 @@ interface SessionUpdate {
 
 type WebSocketMessage = StatusUpdate | SessionUpdate;
 
-const WS_BASE_URL = 'ws://localhost:8000';
+// Dynamically use current hostname (works for Docker + dev)
+const hostname = window.location.hostname;
+const WS_BASE_URL = `ws://${hostname}:8000`;
+
+console.log('🔍 WebSocket configuration:', {
+  hostname: hostname,
+  baseUrl: WS_BASE_URL,
+  currentLocation: window.location.href,
+  isDocker: hostname !== 'localhost' && hostname !== '127.0.0.1'
+});
 
 export class WebSocketService {
   private ws: WebSocket | null = null;
@@ -39,13 +48,19 @@ export class WebSocketService {
       
       const wsUrl = `${WS_BASE_URL}/api/ws/${promptId}`;
       
-      console.log('🔌 Connecting to WebSocket:', wsUrl);
+      console.log('🔌 Attempting WebSocket connection...');
+      console.log('🔌 WebSocket URL:', wsUrl);
+      console.log('🔌 Prompt ID:', promptId);
+      console.log('🔌 Current WebSocket state:', this.ws?.readyState);
 
       try {
         this.ws = new WebSocket(wsUrl);
+        console.log('🔌 WebSocket object created, readyState:', this.ws.readyState);
 
-        this.ws.onopen = () => {
-          console.log(`🔌 WebSocket connected for prompt ${promptId}`);
+        this.ws.onopen = (event) => {
+          console.log(`✅ WebSocket OPENED successfully for prompt ${promptId}`);
+          console.log('🔌 Open event details:', event);
+          console.log('🔌 WebSocket readyState after open:', this.ws?.readyState);
           this.reconnectAttempts = 0;
           resolve();
         };
@@ -62,12 +77,19 @@ export class WebSocketService {
         };
 
         this.ws.onclose = (event) => {
-          console.log('🔌 WebSocket connection closed:', event.code, event.reason);
+          console.log('🚪 WebSocket connection CLOSED');
+          console.log('🚪 Close code:', event.code);
+          console.log('🚪 Close reason:', event.reason);
+          console.log('🚪 Was clean close:', event.wasClean);
+          console.log('🚪 Close event details:', event);
           this.handleReconnect();
         };
 
         this.ws.onerror = (error) => {
-          console.error('❌ WebSocket error:', error);
+          console.error('❌ WebSocket ERROR occurred:');
+          console.error('❌ Error details:', error);
+          console.error('❌ WebSocket readyState during error:', this.ws?.readyState);
+          console.error('❌ WebSocket URL during error:', wsUrl);
           reject(error);
         };
 
