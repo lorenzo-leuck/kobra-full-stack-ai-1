@@ -12,9 +12,11 @@ class Settings(BaseSettings):
     
     # Pinterest settings
     PINTEREST_BASE_URL: str = "https://www.pinterest.com"
+    PINTEREST_USERNAME: Optional[str] = None
+    PINTEREST_PASSWORD: Optional[str] = None
     
     # OpenAI settings
-    OPENAI_API_KEY: str
+    OPENAI_API_KEY: Optional[str] = None
     
     class Config:
         env_file = ".env"

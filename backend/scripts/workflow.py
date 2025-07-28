@@ -13,12 +13,15 @@ from app.database import PromptDB, SessionDB, PinDB
 
 load_dotenv()
 
+pinterest_prompt = "retro future bam bam"
+pinterest_number = 10
+
 async def example_workflow():
     """Example usage of the WorkflowOrchestrator class"""
     
     # Create workflow orchestrator instance
     workflow = WorkflowOrchestrator(
-        prompt="cozy industrial home office"
+        prompt=pinterest_prompt
     )
     
     print(f"Created workflow orchestrator for prompt: '{workflow.prompt}'")
@@ -51,7 +54,7 @@ async def example_workflow():
         workflow_data = {
             'prompt_id': result['prompt_id'],
             'pin_count': result['pin_count'],
-            'status': workflow.get_status(),
+            'success': result['success'],
             'pins': pins
         }
         with open('workflow_results.json', 'w') as f:
@@ -62,12 +65,7 @@ async def example_workflow():
         print(f"\n❌ Workflow failed: {result.get('error', 'Unknown error')}")
         print(f"📝 Check database for session logs")
     
-    # Print workflow status
-    status = workflow.get_status()
-    print(f"\n📊 Workflow Status:")
-    print(f"  Prompt Status: {status['prompt_status']}")
-    print(f"  Pin Count: {status['pin_count']}")
-    print(f"  Sessions: {len(status['sessions'])}")
+    print(f"\n🎉 Workflow execution completed!")
 
 async def example_step_by_step():
     """Example of running workflow step by step with status monitoring"""
@@ -78,7 +76,7 @@ async def example_step_by_step():
     # Run Pinterest workflow with monitoring
     print("🔧 Starting Pinterest workflow...")
     result = await workflow.run_pinterest_workflow(
-        num_images=5,  # Scrape 5 images for testing
+        num_images=pinterest_number,  # Scrape 5 images for testing
         headless=True
     )
     
@@ -104,18 +102,8 @@ async def example_step_by_step():
         print(f"Sessions completed: {len([s for s in status['sessions'] if s['status'] == 'completed'])}")
 
 if __name__ == "__main__":
-    print("Pinterest Workflow Examples")
-    print("=" * 40)
+    print(f"🚀 Running Pinterest Workflow: '{pinterest_prompt}'")
+    print("=" * 50)
     
-    # Choose which example to run
-    print("1. Complete workflow")
-    print("2. Step-by-step workflow")
-    
-    choice = input("Choose example (1 or 2): ").strip()
-    
-    if choice == "1":
-        asyncio.run(example_workflow())
-    elif choice == "2":
-        asyncio.run(example_step_by_step())
-    else:
-        print("Invalid choice")
+    # Run the complete workflow directly
+    asyncio.run(example_workflow())

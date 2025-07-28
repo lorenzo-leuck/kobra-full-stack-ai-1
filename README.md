@@ -57,7 +57,16 @@ npm run dev
 
 The backend includes specialized scripts for Pinterest data collection:
 
-### Pinterest Warmup & Scraping
+### Workflow Script
+
+```bash
+cd backend
+python3 scripts/workflow.py
+```
+
+Runs the complete Pinterest workflow with database integration. Edit `pinterest_prompt` and `pinterest_number` variables in the script to configure.
+
+### Pinterest Script
 
 ```bash
 cd backend
@@ -71,9 +80,6 @@ python3 scripts/pinterest.py "boho minimalist bedroom" 10
 
 # Headless mode with custom output name
 python3 scripts/pinterest.py "80s rappers" 15 --headless --output-name vintage_hip_hop
-
-# Just get URLs without downloading images
-python3 scripts/pinterest.py "modern kitchen" 20 --no-download
 ```
 
 **Options:**
@@ -86,13 +92,6 @@ python3 scripts/pinterest.py "modern kitchen" 20 --no-download
 **Output:**
 - JSON metadata: `exports/warmup_prompt/warmup_prompt_metadata.json`
 - Downloaded images: `exports/warmup_prompt/warmup_prompt_N.jpg`
-
-### Download Images from JSON
-
-```bash
-# Download images from existing JSON metadata
-python3 scripts/download.py path/to/metadata.json
-```
 
 # Architecture
 
@@ -147,9 +146,14 @@ backend/
 ├── app/
 │   ├── __init__.py
 │   ├── main.py              # FastAPI application entry point
-│   ├── config.py            # Configuration settings
-│   ├── database.py          # MongoDB connection
-│   ├── models/              # Pydantic models
+│   ├── config.py            # Configuration settings (MongoDB, Pinterest, OpenAI)
+│   ├── database/            # Database layer with MongoDB integration
+│   │   ├── __init__.py      # Exports all database classes
+│   │   ├── base.py          # BaseDB with common CRUD operations
+│   │   ├── prompts.py       # PromptDB + PromptSchema
+│   │   ├── sessions.py      # SessionDB + SessionSchema
+│   │   └── pins.py          # PinDB + PinSchema + PinMetadata
+│   ├── models/              # Pydantic models (legacy)
 │   │   ├── __init__.py
 │   │   ├── prompt.py        # Prompt model with MongoDB ObjectId
 │   │   ├── session.py       # Session model for tracking processing stages
@@ -161,6 +165,9 @@ backend/
 │   │   └── pins.py          # Pin management with filtering
 │   └── services/            # Business logic
 │       ├── __init__.py
+│       ├── workflow/        # Workflow orchestration
+│       │   ├── __init__.py
+│       │   └── main.py      # WorkflowOrchestrator + PinterestWorkflowHandler
 │       ├── pinterest/       # Pinterest scraping services
 │       │   ├── __init__.py
 │       │   ├── session.py   # Browser session management
@@ -170,13 +177,43 @@ backend/
 │           ├── __init__.py
 │           └── evaluator.py # Image-prompt matching with explanations
 ├── scripts/                 # Standalone scripts
-│   ├── pinterest.py         # Main Pinterest scraping CLI
+│   ├── workflow.py          # NEW: Workflow orchestrator script (recommended)
+│   ├── pinterest.py         # Legacy Pinterest scraping CLI
 │   └── download.py          # Image download utilities
 ├── exports/                 # Generated data exports
 │   └── warmup_*/            # Per-prompt export folders
 ├── requirements.txt         # Project dependencies
 └── .env.example             # Example environment variables
 ```
+
+### Workflow Orchestrator Architecture
+
+The system now uses a modular workflow orchestrator that separates concerns and enables future expansion:
+
+**WorkflowOrchestrator**:
+- Generic orchestration class that coordinates different services
+- Manages prompt creation and database persistence
+- Provides clean interfaces: `run_pinterest_workflow()`, `run_ai_agent_workflow()` (future)
+- Handles error recovery and status tracking
+
+**PinterestWorkflowHandler**:
+- Pinterest-specific implementation
+- Manages Pinterest credentials and browser sessions
+- Orchestrates: warmup → scraping → enrichment phases
+- Logs all activities with timestamps to MongoDB
+
+**Database Layer**:
+- **BaseDB**: Common CRUD operations (create_one, get_many, update_by_id, etc.)
+- **Collection-specific classes**: PromptDB, SessionDB, PinDB with Pydantic schemas
+- **Proper separation**: Each method imports only what it needs
+- **Status tracking**: "pending" → "ready" (ready for AI validation)
+
+**Benefits**:
+- ✅ **Separation of concerns**: Orchestrator vs service-specific handlers
+- ✅ **Future-proof**: Easy to add AI agents and other services
+- ✅ **Database-driven**: All workflow state persisted in MongoDB
+- ✅ **Clean interfaces**: Simple method calls, complex logic hidden
+- ✅ **Modular imports**: No global dependencies, imports where needed
 
 ### API Endpoints
 
@@ -295,6 +332,7 @@ The Pinterest scraping system implements a sophisticated warm-up strategy to ali
 * 0.3 - Backend setup
 * 0.4 - Docker compose setup
 * 0.5 - MongoDB schema implementation with collections for prompts, sessions, and pins
+* 0.6 - **Workflow orchestrator refactor**: Modular database layer with BaseDB + collection-specific classes, WorkflowOrchestrator with PinterestWorkflowHandler, separation of concerns, and database-driven workflow state management
 
 
 # License

@@ -10,6 +10,7 @@ class PinMetadata(BaseModel):
     collected_at: datetime
     
     class Config:
+        arbitrary_types_allowed = True
         json_encoders = {
             datetime: lambda v: v.isoformat()
         }
@@ -28,6 +29,7 @@ class PinSchema(BaseModel):
     metadata: PinMetadata
     
     class Config:
+        arbitrary_types_allowed = True
         json_encoders = {
             datetime: lambda v: v.isoformat(),
             ObjectId: str

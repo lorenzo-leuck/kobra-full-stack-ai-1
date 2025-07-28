@@ -12,6 +12,7 @@ class PromptSchema(BaseModel):
     status: str = "pending"  # "pending" | "completed" | "error"
     
     class Config:
+        arbitrary_types_allowed = True
         json_encoders = {
             datetime: lambda v: v.isoformat(),
             ObjectId: str

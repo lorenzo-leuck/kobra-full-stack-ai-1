@@ -14,6 +14,7 @@ class SessionSchema(BaseModel):
     log: List[str] = Field(default_factory=list)
     
     class Config:
+        arbitrary_types_allowed = True
         json_encoders = {
             datetime: lambda v: v.isoformat(),
             ObjectId: str

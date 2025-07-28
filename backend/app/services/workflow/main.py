@@ -170,7 +170,7 @@ class PinterestWorkflowHandler:
             
             if warmup_success:
                 self._log("Warmup phase completed successfully")
-                SessionDB.update_session_status(self.current_session_id, "completed")
+                SessionDB.update_session_status(self.current_session_id, "ready")
                 return True
             else:
                 self._log("Warmup phase failed, but continuing...")
@@ -219,7 +219,7 @@ class PinterestWorkflowHandler:
                 pin_ids = PinDB.create_pins_from_scraped_data(self.prompt_id, pin_data)
                 self._log(f"Saved {len(pin_ids)} pins to database")
                 
-                SessionDB.update_session_status(self.current_session_id, "completed")
+                SessionDB.update_session_status(self.current_session_id, "ready")
                 return pin_ids
             else:
                 self._log("No pins found during scraping")
@@ -281,7 +281,7 @@ class PinterestWorkflowHandler:
                     PinDB.update_pin_title(pin_id, enriched_data[i]["title"])
             
             self._log(f"Title enrichment completed - {len(enriched_data)} pins processed")
-            SessionDB.update_session_status(self.current_session_id, "completed")
+            SessionDB.update_session_status(self.current_session_id, "ready")
             
             return True
             
@@ -336,8 +336,8 @@ class PinterestWorkflowHandler:
             enrichment_success = await self.run_enrichment_phase()
             
             if enrichment_success:
-                # Mark prompt as completed
-                PromptDB.update_prompt_status(self.prompt_id, "completed")
+                # Mark prompt as ready for AI validation
+                PromptDB.update_prompt_status(self.prompt_id, "ready")
                 
                 # Get final pin count
                 pin_count = PinDB.count_pins_by_prompt(self.prompt_id)
