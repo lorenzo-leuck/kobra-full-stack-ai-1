@@ -23,9 +23,9 @@ export interface Session {
   _id: string;
   prompt_id: string;
   stage: 'warmup' | 'scraping' | 'validation';
-  status: 'pending' | 'completed' | 'failed';
+  status: 'pending' | 'running' | 'completed' | 'failed';
   timestamp: string;
-  log: string[];
+  logs: string[];
 }
 
 export interface ProgressStage {

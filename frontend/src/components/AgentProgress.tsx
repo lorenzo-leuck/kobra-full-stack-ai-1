@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { CheckCircle, Clock, AlertCircle, Loader2, Heart, Search, Brain } from 'lucide-react';
 import ThemeToggle from './ThemeToggle';
+import { websocketService } from '../services/websocket';
+import { ApiService } from '../services/api';
 
 interface AgentProgressProps {
   promptId: string;
@@ -24,9 +26,9 @@ export default function AgentProgress({ promptId, onComplete }: AgentProgressPro
       name: 'Pinterest Warm-up',
       description: 'Engaging with Pinterest to align recommendations',
       icon: <Heart className="w-5 h-5" />,
-      status: 'active',
+      status: 'pending',
       progress: 0,
-      logs: ['Initializing Pinterest session...', 'Logging into account...']
+      logs: []
     },
     {
       id: 'scraping',
@@ -49,74 +51,105 @@ export default function AgentProgress({ promptId, onComplete }: AgentProgressPro
   ]);
 
   const [overallProgress, setOverallProgress] = useState(0);
+  const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected' | 'error'>('connecting');
+  const [currentStatus, setCurrentStatus] = useState('Initializing workflow...');
+  const [isCompleted, setIsCompleted] = useState(false);
 
   useEffect(() => {
-    // TODO: Replace with actual API polling
-    // const pollStatus = async () => {
-    //   try {
-    //     const response = await fetch(`/api/prompts/${promptId}/status`);
-    //     const data = await response.json();
-    //     updateStagesFromAPI(data);
-    //   } catch (error) {
-    //     console.error('Failed to poll status:', error);
-    //   }
-    // };
+    let mounted = true;
 
-    // Simulate progress for demo
-    const simulateProgress = () => {
-      let currentStage = 0;
-      let progress = 0;
-
-      const interval = setInterval(() => {
-        progress += Math.random() * 15;
+    const connectWebSocket = async () => {
+      try {
+        setConnectionStatus('connecting');
+        await websocketService.connect(promptId);
         
-        setStages(prev => prev.map((stage, index) => {
-          if (index < currentStage) {
-            return { ...stage, status: 'completed' as const, progress: 100 };
-          } else if (index === currentStage) {
-            const stageProgress = Math.min(progress, 100);
-            const newLogs = [...(stage.logs || [])];
-            
-            if (stage.id === 'warmup' && stageProgress > 20 && newLogs.length < 4) {
-              newLogs.push(...['Searching for relevant pins...', 'Saving pins to board...', 'Interacting with content...']);
-            } else if (stage.id === 'scraping' && stageProgress > 30 && newLogs.length < 3) {
-              newLogs.push('Scraping feed images...', `Collected ${Math.floor(stageProgress/5)} of 25 pins...`);
-            } else if (stage.id === 'validation' && stageProgress > 40 && newLogs.length < 3) {
-              newLogs.push('Loading AI model...', `Validating pin ${Math.floor(stageProgress/10)} of 25...`);
-            }
-
-            return {
-              ...stage,
-              status: stageProgress >= 100 ? 'completed' as const : 'active' as const,
-              progress: stageProgress,
-              logs: newLogs
-            };
-          } else {
-            return { ...stage, status: 'pending' as const };
-          }
-        }));
-
-        if (progress >= 100) {
-          currentStage++;
-          progress = 0;
-          
-          if (currentStage >= 3) {
-            clearInterval(interval);
-            setOverallProgress(100);
-            setTimeout(() => onComplete(), 1000);
-          }
+        if (mounted) {
+          setConnectionStatus('connected');
         }
-
-        const completedStages = Math.min(currentStage, 3);
-        const currentStageProgress = Math.min(progress, 100);
-        setOverallProgress((completedStages * 100 + currentStageProgress) / 3);
-      }, 800);
-
-      return () => clearInterval(interval);
+      } catch (error) {
+        console.error('Failed to connect WebSocket:', error);
+        if (mounted) {
+          setConnectionStatus('error');
+        }
+      }
     };
 
-    const cleanup = simulateProgress();
-    return cleanup;
+    const handleWebSocketMessage = (message: any) => {
+      if (!mounted) return;
+
+      if (message.type === 'status_update') {
+        const { overall_status, progress, messages, current_step, total_steps } = message.data;
+        
+        setOverallProgress(progress);
+        setCurrentStatus(messages[messages.length - 1] || 'Processing...');
+        
+        if (overall_status === 'completed') {
+          setIsCompleted(true);
+          setTimeout(() => {
+            if (mounted) onComplete();
+          }, 1500);
+        }
+
+        // Update stages based on current step
+        setStages(prev => prev.map((stage, index) => {
+          if (index < current_step - 1) {
+            return { ...stage, status: 'completed' as const, progress: 100 };
+          } else if (index === current_step - 1) {
+            return { ...stage, status: 'active' as const, progress: (progress / total_steps) * 100 };
+          } else {
+            return { ...stage, status: 'pending' as const, progress: 0 };
+          }
+        }));
+      }
+
+      if (message.type === 'session_update') {
+        const { stage, logs } = message.data;
+        
+        setStages(prev => prev.map(s => {
+          if (s.id === stage) {
+            return { ...s, logs: logs || [] };
+          }
+          return s;
+        }));
+      }
+    };
+
+    // Initial status fetch
+    const fetchInitialStatus = async () => {
+      try {
+        const statusData = await ApiService.getPromptStatus(promptId);
+        setOverallProgress(statusData.overall_progress);
+        setCurrentStatus(`Current stage: ${statusData.current_stage}`);
+        
+        // Update stages based on sessions
+        if (statusData.sessions) {
+          setStages(prev => prev.map(stage => {
+            const session = statusData.sessions.find(s => s.stage === stage.id);
+            if (session) {
+              return {
+                ...stage,
+                status: session.status === 'completed' ? 'completed' : 
+                       session.status === 'running' ? 'active' : 'pending',
+                logs: session.logs || []
+              };
+            }
+            return stage;
+          }));
+        }
+      } catch (error) {
+        console.error('Failed to fetch initial status:', error);
+      }
+    };
+
+    websocketService.addListener(handleWebSocketMessage);
+    connectWebSocket();
+    fetchInitialStatus();
+
+    return () => {
+      mounted = false;
+      websocketService.removeListener(handleWebSocketMessage);
+      websocketService.disconnect();
+    };
   }, [promptId, onComplete]);
 
   const getStatusIcon = (status: string) => {
@@ -144,13 +177,26 @@ export default function AgentProgress({ promptId, onComplete }: AgentProgressPro
         <div className="bg-white/80 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl p-8 border border-gray-200 dark:border-gray-700 mb-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-semibold text-gray-800 dark:text-white">Overall Progress</h2>
-            <span className="text-sm font-medium text-gray-600 dark:text-gray-300">{Math.round(overallProgress)}%</span>
+            <div className="flex items-center gap-3">
+              <div className={`w-2 h-2 rounded-full ${
+                connectionStatus === 'connected' ? 'bg-green-500' :
+                connectionStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' :
+                connectionStatus === 'error' ? 'bg-red-500' : 'bg-gray-400'
+              }`} />
+              <span className="text-sm font-medium text-gray-600 dark:text-gray-300">{Math.round(overallProgress)}%</span>
+            </div>
           </div>
           <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 mb-4">
             <div 
-              className="bg-gradient-to-r from-blue-500 to-purple-600 h-3 rounded-full transition-all duration-500 ease-out"
+              className={`h-3 rounded-full transition-all duration-500 ease-out ${
+                isCompleted ? 'bg-gradient-to-r from-green-500 to-emerald-600' :
+                'bg-gradient-to-r from-blue-500 to-purple-600'
+              }`}
               style={{ width: `${overallProgress}%` }}
             />
+          </div>
+          <div className="text-sm text-gray-600 dark:text-gray-400">
+            {currentStatus}
           </div>
         </div>
 

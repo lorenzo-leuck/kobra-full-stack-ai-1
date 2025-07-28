@@ -288,15 +288,70 @@ Modern React + TypeScript frontend with three-phase user experience:
 frontend/src/
 ├── components/
 │   ├── PromptSubmission.tsx    # Landing page with prompt input
-│   ├── AgentProgress.tsx       # Real-time workflow progress
+│   ├── AgentProgress.tsx       # Real-time workflow progress with WebSocket
 │   ├── ImageReview.tsx         # Results gallery with filtering
 │   ├── LoadingSpinner.tsx      # Reusable loading component
 │   ├── StatusBadge.tsx         # Pin approval status
 │   ├── ScoreBar.tsx           # AI match score visualization
 │   └── ErrorBoundary.tsx      # Error handling
+├── services/
+│   ├── api.ts                 # REST API service layer
+│   └── websocket.ts           # WebSocket service for real-time updates
 ├── types/index.ts             # TypeScript interfaces
 └── App.tsx                    # Main application router
 ```
+
+### Real-Time Updates with WebSocket
+
+The frontend uses WebSocket connections for real-time workflow progress updates:
+
+**WebSocket Service** (`/services/websocket.ts`):
+- Manages WebSocket connections per prompt ID
+- Handles automatic reconnection with exponential backoff
+- Type-safe message handling with TypeScript interfaces
+- Connection status monitoring (connecting, connected, error, disconnected)
+
+**Message Types**:
+```typescript
+// Status updates from workflow orchestrator
+interface StatusUpdate {
+  type: 'status_update';
+  data: {
+    prompt_id: string;
+    overall_status: string;
+    current_step: number;
+    total_steps: number;
+    progress: number;        // 0-100 percentage
+    messages: string[];      // Step-by-step progress messages
+  };
+}
+
+// Session updates from individual workflow phases
+interface SessionUpdate {
+  type: 'session_update';
+  data: {
+    prompt_id: string;
+    session_id: string;
+    stage: 'warmup' | 'scraping' | 'validation';
+    status: string;
+    logs: string[];          // Phase-specific log messages
+  };
+}
+```
+
+**Integration Flow**:
+1. User submits prompt → POST `/api/prompts` → workflow starts in background
+2. Frontend connects to WebSocket endpoint `/api/ws/{prompt_id}`
+3. Backend broadcasts real-time updates during workflow execution
+4. Frontend updates progress bars, status messages, and stage indicators
+5. Workflow completion triggers automatic transition to results view
+
+**Benefits**:
+- ✅ **Real-time feedback**: Immediate progress updates without polling
+- ✅ **Efficient**: Single WebSocket connection vs multiple HTTP requests
+- ✅ **Responsive**: Live progress bars and status indicators
+- ✅ **Reliable**: Automatic reconnection and error handling
+- ✅ **Type-safe**: Full TypeScript support for message handling
 
 ### User Flow
 1. **Prompt Submission**: User enters visual prompt with example suggestions

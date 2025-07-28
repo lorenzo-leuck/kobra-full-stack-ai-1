@@ -44,16 +44,18 @@ class WorkflowOrchestrator:
             from ...database.sessions import SessionDB
             SessionDB.add_session_log(self.current_session_id, log_entry)
     
-    def setStatus(self, status: str, message: str = None, progress_percentage: float = None) -> None:
+    async def setStatus(self, status: str, message: str = None, progress_percentage: float = None) -> None:
         """
-        Update workflow status
+        Update workflow status and send WebSocket update
         """
         if not self.prompt_id:
             return
         
         try:
             from ...database.status import StatusDB
+            from ..websocket import websocket_manager
             
+            # Update status in database
             StatusDB.update_step_status(
                 prompt_id=str(self.prompt_id),
                 status=status,
@@ -62,6 +64,19 @@ class WorkflowOrchestrator:
             )
             
             self._log(f"Status updated: {status} - {message}")
+            
+            # Send WebSocket update
+            status_data = {
+                "status": status,
+                "message": message,
+                "progress_percentage": progress_percentage,
+                "prompt_id": str(self.prompt_id)
+            }
+            
+            await websocket_manager.send_status_update(
+                prompt_id=str(self.prompt_id),
+                status_data=status_data
+            )
             
         except Exception as e:
             self._log(f"Failed to update status: {e}")
@@ -320,7 +335,7 @@ class PinterestWorkflowHandler:
         try:
             # Update status to running
             if self.orchestrator:
-                self.orchestrator.setStatus("running", "Starting Pinterest algorithm warmup")
+                await self.orchestrator.setStatus("running", "Starting Pinterest algorithm warmup")
             
             self._log(f"Starting warmup phase for prompt: '{self.prompt}'")
             
@@ -332,7 +347,7 @@ class PinterestWorkflowHandler:
                 
                 # Update status to completed
                 if self.orchestrator:
-                    self.orchestrator.setStatus("completed", "Pinterest algorithm warmup completed successfully")
+                    await self.orchestrator.setStatus("completed", "Pinterest algorithm warmup completed successfully")
                 
                 return True
             else:
@@ -341,7 +356,7 @@ class PinterestWorkflowHandler:
                 
                 # Update status to failed
                 if self.orchestrator:
-                    self.orchestrator.setStatus("failed", "Warmup phase failed")
+                    await self.orchestrator.setStatus("failed", "Warmup phase failed")
                 
                 return False
                 
@@ -351,7 +366,7 @@ class PinterestWorkflowHandler:
             
             # Update status to failed
             if self.orchestrator:
-                self.orchestrator.setStatus("failed", "Warmup phase error")
+                await self.orchestrator.setStatus("failed", "Warmup phase error")
             
             return False
     
@@ -380,7 +395,7 @@ class PinterestWorkflowHandler:
         try:
             # Update status to running
             if self.orchestrator:
-                self.orchestrator.setStatus("running", f"Starting scraping phase - collecting {num_images} pins")
+                await self.orchestrator.setStatus("running", f"Starting scraping phase - collecting {num_images} pins")
             
             self._log(f"Starting scraping phase - collecting {num_images} pins")
             
@@ -401,7 +416,7 @@ class PinterestWorkflowHandler:
                 
                 # Update status to completed
                 if self.orchestrator:
-                    self.orchestrator.setStatus("completed", f"Scraping completed - found {len(pin_data)} pins", 
+                    await self.orchestrator.setStatus("completed", f"Scraping completed - found {len(pin_data)} pins", 
                                               progress_percentage=100.0)
                 
                 SessionDB.update_session_status(self.scraping_session_id, "completed")
@@ -412,7 +427,7 @@ class PinterestWorkflowHandler:
                 
                 # Update status to failed
                 if self.orchestrator:
-                    self.orchestrator.setStatus("failed", "No pins found during scraping")
+                    await self.orchestrator.setStatus("failed", "No pins found during scraping")
                 
                 return []
                 
@@ -422,7 +437,7 @@ class PinterestWorkflowHandler:
             
             # Update status to failed
             if self.orchestrator:
-                self.orchestrator.setStatus("failed", "Scraping phase error")
+                await self.orchestrator.setStatus("failed", "Scraping phase error")
             
             return []
     
@@ -447,7 +462,7 @@ class PinterestWorkflowHandler:
             
             # Update status to failed
             if self.orchestrator:
-                self.orchestrator.setStatus("failed", "No pins found in database to enrich")
+                await self.orchestrator.setStatus("failed", "No pins found in database to enrich")
             
             SessionDB.update_session_status(enrichment_session_id, "failed")
             return False
@@ -457,7 +472,7 @@ class PinterestWorkflowHandler:
             
             # Update status to failed
             if self.orchestrator:
-                self.orchestrator.setStatus("failed", "Pins handler not initialized")
+                await self.orchestrator.setStatus("failed", "Pins handler not initialized")
             
             SessionDB.update_session_status(enrichment_session_id, "failed")
             return False
@@ -465,7 +480,7 @@ class PinterestWorkflowHandler:
         try:
             # Update status to running
             if self.orchestrator:
-                self.orchestrator.setStatus("running", f"Starting title enrichment for {len(pins)} pins")
+                await self.orchestrator.setStatus("running", f"Starting title enrichment for {len(pins)} pins")
             
             self._log(f"Starting title enrichment for {len(pins)} pins")
             
@@ -497,7 +512,7 @@ class PinterestWorkflowHandler:
             
             # Update status to completed
             if self.orchestrator:
-                self.orchestrator.setStatus("completed", f"Title enrichment completed - {len(enriched_data)} pins processed, {titles_found} titles found", 
+                await self.orchestrator.setStatus("completed", f"Title enrichment completed - {len(enriched_data)} pins processed, {titles_found} titles found", 
                                           progress_percentage=100.0)
             
             SessionDB.update_session_status(enrichment_session_id, "completed")
@@ -509,7 +524,7 @@ class PinterestWorkflowHandler:
             
             # Update status to failed
             if self.orchestrator:
-                self.orchestrator.setStatus("failed", "Enrichment phase error")
+                await self.orchestrator.setStatus("failed", "Enrichment phase error")
             
             SessionDB.update_session_status(enrichment_session_id, "failed")
             return False
@@ -537,18 +552,18 @@ class PinterestWorkflowHandler:
         try:
             # Phase 1: Initialize session
             if self.orchestrator:
-                self.orchestrator.setStatus("running", "Initializing Pinterest session and browser", 0.0)
+                await self.orchestrator.setStatus("running", "Initializing Pinterest session and browser", 0.0)
             
             self._log("=== INITIALIZATION PHASE ===")
             init_success = await self.initialize_session(headless=headless)
             if not init_success:
                 if self.orchestrator:
-                    self.orchestrator.setStatus("failed", "Session initialization failed")
+                    await self.orchestrator.setStatus("failed", "Session initialization failed")
                 workflow_result['error'] = "Session initialization failed"
                 return workflow_result
             
             if self.orchestrator:
-                self.orchestrator.setStatus("completed", "Pinterest session initialized successfully", 25.0)
+                await self.orchestrator.setStatus("completed", "Pinterest session initialized successfully", 25.0)
             
             # Phase 2: Warmup (status handled by run_warmup_phase)
             self._log("=== WARMUP PHASE ===")
