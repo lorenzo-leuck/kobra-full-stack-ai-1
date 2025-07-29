@@ -31,7 +31,8 @@ async def main_async():
     warmup = PinterestWarmup(
         prompt=args.prompt,
         username=args.username,
-        password=args.password
+        password=args.password,
+        log_callback=print
     )
     
     try:
