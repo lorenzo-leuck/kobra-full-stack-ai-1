@@ -1,4 +1,4 @@
-# Full-Stack AI Software Engineer Platform
+# Full-Stack AI Software Platform
 
 AI-driven platform for fetching, evaluating, and displaying images that match user-provided prompts
 
@@ -266,28 +266,6 @@ The frontend uses polling-based architecture for real-time workflow progress upd
 - Handles automatic cleanup when workflow completes or fails
 - Exponential backoff on errors for robust error handling
 
-**Message Types**:
-```typescript
-
-**AgentProgress Component**:
-- Starts polling service on component mount
-- Updates progress bars, stage status, and activity logs in real-time
-- Handles workflow completion and automatic redirect to results
-- Proper cleanup and polling termination on component unmount
-
-**Workflow**:
-1. User submits prompt via PromptSubmission component
-2. Frontend starts polling `/api/prompts/{prompt_id}/status` every 2 seconds
-3. Backend updates database with real-time progress during workflow execution
-4. Frontend receives status updates and updates progress bars, status messages, and stage indicators
-5. Workflow completion triggers automatic transition to results view
-
-**Benefits**:
-- ✅ **Reliable**: No connection drops or complex connection management
-- ✅ **Simple**: Standard HTTP requests, easier to debug and maintain
-- ✅ **Stateless**: Each poll gets complete current state from database
-- ✅ **Robust**: Automatic error handling and retry logic
-- ✅ **Type-safe**: Full TypeScript support for message handling
 
 ### User Flow
 1. **Prompt Submission**: User enters visual prompt with example suggestions
@@ -303,28 +281,6 @@ The frontend uses polling-based architecture for real-time workflow progress upd
 - Orchestrates: warmup → scraping → enrichment phases
 - Logs all activities with timestamps to MongoDB
 
-**Database Layer**:
-- **BaseDB**: Common CRUD operations (create_one, get_many, update_by_id, etc.)
-- **Collection-specific classes**: PromptDB, SessionDB, PinDB with Pydantic schemas
-- **Proper separation**: Each method imports only what it needs
-- **Status tracking**: "pending" → "ready" (ready for AI validation)
-
-**Benefits**:
-- ✅ **Separation of concerns**: Orchestrator vs service-specific handlers
-- ✅ **Future-proof**: Easy to add AI agents and other services
-- ✅ **Database-driven**: All workflow state persisted in MongoDB
-- ✅ **Clean interfaces**: Simple method calls, complex logic hidden
-- ✅ **Modular imports**: No global dependencies, imports where needed
-
-### API Endpoints
-
-- `POST /api/prompts` - Create a new visual prompt
-- `GET /api/prompts` - List all prompts
-- `GET /api/prompts/{prompt_id}` - Get a specific prompt
-- `GET /api/pins/prompt/{prompt_id}` - Get pins for a specific prompt with optional filtering
-- `PUT /api/pins/{pin_id}/status` - Update pin status (approved/disqualified)
-- `GET /api/sessions/prompt/{prompt_id}` - Get processing sessions for a prompt
-- `GET /api/sessions/{session_id}` - Get a specific processing session
 
 # Warm-up Logic
 
@@ -334,16 +290,17 @@ The Pinterest scraping system implements a sophisticated warm-up strategy to ali
 
 ### 1. **Warm-up Phase** (`PinterestWarmup.feed_algorithm()`)
 - **Purpose**: Train Pinterest's recommendation algorithm to show relevant content
-- **Strategy**: Search for the target prompt and engage with exactly 5 pins
+- **Strategy**: Search for the target prompt and engage with exactly 6 pins
 - **Engagement Types**:
   - **Pin viewing**: Navigate to individual pin pages
-  - **Heart reactions**: Click the heart/react button when available
+  - **Heart reactions**: Click the heart/react button
+  - **Save pin**: Click the save button
   - **Hover engagement**: Simulate user interest through mouse interactions
 
 ```python
 # Example warm-up for "boho minimalist bedroom"
 1. Search: https://pinterest.com/search/pins/?q=boho+minimalist+bedroom
-2. Engage with 5 pins: view → react with heart → return to search
+2. Engage with 6 pins: view → react with heart → return to search
 3. Algorithm learns user preference for this aesthetic
 ```
 
@@ -367,27 +324,15 @@ The Pinterest scraping system implements a sophisticated warm-up strategy to ali
 **Why Warm-up Works:**
 - Pinterest's algorithm personalizes the homepage feed based on recent interactions
 - Heart reactions signal strong positive engagement
+- Save pin reinforces the preference
 - Multiple pin views in the same category reinforce the preference
-- The 5-pin limit avoids triggering spam detection
+- The 6-pin limit avoids triggering spam detection
 
 **Expected Results:**
 - **Before warm-up**: Generic/mixed content on homepage
 - **After warm-up**: Feed shows pins matching the target aesthetic
 - **Validation**: Higher match scores from AI evaluation
 
-## Data Structure Output
-
-```json
-{
-  "image_url": "https://i.pinimg.com/736x/abc123/image.jpg",
-  "pin_url": "https://pinterest.com/pin/123456789/",
-  "title": "Boho Minimalist Bedroom Ideas",
-  "description": "cozy bedroom with natural textures and neutral colors",
-  "metadata": {
-    "collected_at": "2025-01-27T22:30:15.123456"
-  }
-}
-```
 
 # Model Choice
 
@@ -435,16 +380,39 @@ The Pinterest scraping system implements a sophisticated warm-up strategy to ali
 
 
 # Release History
-* 0.1 - First commit
-* 0.2 - Frontend setup
-* 0.3 - Backend setup
-* 0.4 - Docker compose setup
-* 0.5 - MongoDB schema implementation with collections for prompts, sessions, and pins
-* 0.6 - Pinterest workflow orchestrator with warmup and scraping phases
-* 0.7 - AI validation system with GPT-4o multimodal analysis
-* 0.8 - Status tracking and session management for real-time progress
-* 0.9 - Comprehensive workflow integration with real-time progress tracking
-* 1.0 - Polling-based architecture for improved reliability and simplified deployment
+
+* **0.1** - First commit (Project initialization)
+* **0.2** - Frontend setup (React + TypeScript + Vite)
+* **0.3** - Backend setup (FastAPI + Python)
+* **0.4** - Docker compose setup (Containerization)
+* **0.5** - Pydantic DB schemas (MongoDB collections)
+* **0.6** - Pinterest scraper implementation (Playwright automation)
+* **0.7** - Pinterest warmup algorithm (Feed personalization)
+* **0.8** - Pinterest pin service (Image collection)
+* **0.9** - Main workflow orchestrator (Three-phase process)
+* **0.10** - Database class and workflow script (Data persistence)
+* **0.11** - Frontend UX improvements (Modern UI design)
+* **0.12** - Dark theme implementation (Visual enhancements)
+* **0.13** - AI evaluator integration (GPT-4o multimodal)
+* **0.14** - Database migrations (Schema updates)
+* **0.15** - AI evaluation fixes (Image validation)
+* **0.16** - Pin scraping optimizations (Data extraction)
+* **0.17** - Image evaluator refinements (Match scoring)
+* **0.18** - Agents collection system (Dynamic prompts)
+* **0.19** - Status process implementation (Progress tracking)
+* **0.20** - Single prompt endpoint (API simplification)
+* **0.21** - Docker scraper setup fixes (Container optimization)
+* **0.22** - WebSocket integration (Real-time communication)
+* **0.23** - WebSocket frontend implementation (Live updates)
+* **0.24** - Polling architecture migration (Improved reliability)
+* **0.25** - UX improvements (User experience enhancements)
+* **0.26** - Prompt menu system (Interactive prompts)
+* **0.27** - Status fix (Progress tracking refinements)
+* **0.28** - Tech tags (Technology badges)
+* **0.29** - Title updates (Documentation improvements)
+* **0.30** - AWS setup (Cloud deployment)
+* **1.0** - Production deployment (AWS EC2 + Docker)
+
 
 # License
 

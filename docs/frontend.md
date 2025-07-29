@@ -6,25 +6,6 @@
 - **Advanced Filtering**: Filter by approval status, match score threshold, and view modes
 - **Component Architecture**: Modular, reusable components with TypeScript support
 
-# Architecture
-
-```
-src/
-├── components/           # React components
-│   ├── PromptSubmission.tsx    # Initial prompt input form
-│   ├── AgentProgress.tsx       # Real-time workflow progress
-│   ├── ImageReview.tsx         # Results gallery with filtering
-│   ├── LoadingSpinner.tsx      # Reusable loading component
-│   ├── StatusBadge.tsx         # Pin approval status badge
-│   └── ScoreBar.tsx           # AI match score visualization
-├── services/            # API service layer
-│   └── api.ts          # Backend API integration
-├── types/              # TypeScript type definitions
-│   └── index.ts        # Shared interfaces and types
-├── App.tsx             # Main application component
-└── index.css           # Global styles and utilities
-```
-
 # UI Components
 
 ## PromptSubmission
