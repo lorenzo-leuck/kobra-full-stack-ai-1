@@ -31,15 +31,20 @@ class StatusDB(BaseDB):
     @classmethod
     def create_workflow_status(cls, prompt_id: str) -> str:
         """Create a new workflow status document (only if one doesn't exist)"""
+        print(f"🔧 Creating workflow status for prompt_id: {prompt_id}")
         prompt_id_obj = ObjectId(prompt_id)
         
         # Check if status document already exists
         existing = cls.get_one({"prompt_id": prompt_id_obj})
         if existing:
+            print(f"✅ Status document already exists: {existing['_id']}")
             return str(existing["_id"])
         
         # Clean up any duplicate status documents for this prompt_id
-        cls.collection.delete_many({"prompt_id": prompt_id_obj})
+        collection = cls.get_collection()
+        deleted_count = collection.delete_many({"prompt_id": prompt_id_obj}).deleted_count
+        if deleted_count > 0:
+            print(f"Cleaned up {deleted_count} duplicate status documents")
         
         status_data = {
             "prompt_id": prompt_id_obj,
@@ -52,27 +57,37 @@ class StatusDB(BaseDB):
             "completed_at": None
         }
         
-        result = cls.create_one(status_data)
-        return str(result)
+        print(f"📝 Creating status document with data: {status_data}")
+        try:
+            result = cls.create_one(status_data)
+            print(f"✅ Status document created successfully: {result}")
+            
+            # Verify it was created
+            verification = cls.get_one({"_id": ObjectId(result)})
+            if verification:
+                print(f"✅ Verification successful: status document exists")
+            else:
+                print(f"❌ Verification failed: status document not found after creation")
+            
+            return str(result)
+        except Exception as e:
+            print(f"❌ Failed to create status document: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
     
     @classmethod
     def update_step_status(cls, prompt_id: str, status: str, message: str = None, progress: float = None) -> bool:
         """Update workflow status"""
-        print(f"🔍 StatusDB.update_step_status called: prompt_id={prompt_id}, status={status}, progress={progress}, message={message}")
-        
-        # First, get current document to calculate proper step counts
+        # Try to get existing status document
         current_doc = cls.get_one({"prompt_id": ObjectId(prompt_id)})
+        
         if not current_doc:
-            print(f"❌ No status document found for prompt_id: {prompt_id}")
-            # Create the status document if it doesn't exist
-            print(f"🔄 Creating status document for prompt_id: {prompt_id}")
             cls.create_workflow_status(prompt_id)
             current_doc = cls.get_one({"prompt_id": ObjectId(prompt_id)})
+            
             if not current_doc:
-                print(f"❌ Failed to create status document")
                 return False
-        
-        print(f"✅ Found status document: {current_doc.get('_id')}")
         
         update_data = {
             "overall_status": status
@@ -97,40 +112,26 @@ class StatusDB(BaseDB):
         # ALWAYS update progress if provided
         if progress is not None:
             update_data["progress"] = float(progress)
-            print(f"📊 Setting progress to: {progress}")
         
         if status == "completed":
             update_data["completed_at"] = datetime.now()
         
         # Build the update query
-        print(f"📝 Update data prepared: {update_data}")
-        
         if "$push" in update_data:
             update_query = {
                 "$set": {k: v for k, v in update_data.items() if k != "$push"},
                 "$push": update_data["$push"]
             }
-            print(f"🔄 Executing update with $push: {update_query}")
             result = cls.update_one(
                 {"prompt_id": ObjectId(prompt_id)},
                 update_query
             )
         else:
             update_query = {"$set": update_data}
-            print(f"🔄 Executing update with $set: {update_query}")
             result = cls.update_one(
                 {"prompt_id": ObjectId(prompt_id)},
                 update_query
             )
-        
-        print(f"📊 Update result: {result}")
-        
-        # Verify the update by reading back the document
-        updated_doc = cls.get_one({"prompt_id": ObjectId(prompt_id)})
-        if updated_doc:
-            print(f"✅ Verified update - progress now: {updated_doc.get('progress')}, status: {updated_doc.get('overall_status')}")
-        else:
-            print(f"❌ Could not verify update - document not found")
         
         return result  # cls.update_one already returns boolean
     

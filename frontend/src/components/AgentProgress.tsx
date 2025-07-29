@@ -52,7 +52,7 @@ export default function AgentProgress({ promptId, onComplete }: AgentProgressPro
 
   const [overallProgress, setOverallProgress] = useState(0);
   const [pollingStatus, setPollingStatus] = useState<'starting' | 'active' | 'stopped' | 'error'>('starting');
-  const [currentStatus, setCurrentStatus] = useState('');
+
   const [isCompleted, setIsCompleted] = useState(false);
 
   useEffect(() => {
@@ -69,7 +69,7 @@ export default function AgentProgress({ promptId, onComplete }: AgentProgressPro
         console.log('📊 Status update:', { overall_status, progress, messages });
         
         setOverallProgress(progress);
-        setCurrentStatus(messages[messages.length - 1] || 'Processing...');
+
         
         if (overall_status === 'completed') {
           console.log('🎉 Workflow completed!');
@@ -123,22 +123,32 @@ export default function AgentProgress({ promptId, onComplete }: AgentProgressPro
         const statusData = await ApiService.getPromptStatus(promptId);
         setOverallProgress(statusData.overall_progress || 0);
         
-        // Update stages based on sessions
-        if (statusData.sessions) {
-          setStages(prev => prev.map(stage => {
-            const session = statusData.sessions.find(s => s.stage === stage.id);
-            if (session) {
-              return {
-                ...stage,
-                status: session.status === 'completed' ? 'completed' : 
-                       session.status === 'running' ? 'active' : 
-                       session.status === 'failed' ? 'failed' : 'pending',
-                logs: session.logs || []
-              };
-            }
-            return stage;
-          }));
-        }
+        // Update stages based on progress and sessions
+        const progress = statusData.overall_progress || 0;
+        
+        setStages(prev => prev.map(stage => {
+          const session = statusData.sessions?.find(s => s.stage === stage.id);
+          
+          // Determine stage status based on progress
+          let stageStatus: 'pending' | 'active' | 'completed' | 'failed' = 'pending';
+          
+          if (stage.id === 'warmup') {
+            if (progress >= 33) stageStatus = 'completed';
+            else if (progress > 0 && progress < 33) stageStatus = 'active';
+          } else if (stage.id === 'scraping') {
+            if (progress >= 66) stageStatus = 'completed';
+            else if (progress >= 33 && progress < 66) stageStatus = 'active';
+          } else if (stage.id === 'validation') {
+            if (progress >= 100) stageStatus = 'completed';
+            else if (progress >= 66 && progress < 100) stageStatus = 'active';
+          }
+          
+          return {
+            ...stage,
+            status: stageStatus,
+            logs: session?.logs || []
+          };
+        }));
       } catch (error) {
         console.error('Failed to fetch initial status:', error);
         setPollingStatus('error');
@@ -214,11 +224,7 @@ export default function AgentProgress({ promptId, onComplete }: AgentProgressPro
               </div>
             )}
           </div>
-          {currentStatus && currentStatus !== 'pending' && (
-            <div className="text-sm text-gray-600 dark:text-gray-400">
-              {currentStatus}
-            </div>
-          )}
+
         </div>
 
         <div className="space-y-6">
@@ -233,9 +239,8 @@ export default function AgentProgress({ promptId, onComplete }: AgentProgressPro
                 key={stage.id} 
                 className={`bg-white/80 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl border-2 transition-all duration-300 overflow-hidden ${
                   isCompleted ? 'border-green-500 shadow-green-200/50 dark:shadow-green-900/30 shadow-lg' :
-                  isActive ? 'border-blue-500 shadow-blue-200/50 dark:shadow-blue-900/30 shadow-lg animate-pulse' :
+                  isActive ? 'border-yellow-500 shadow-yellow-200/50 dark:shadow-yellow-900/30 shadow-lg' :
                   isFailed ? 'border-red-500 shadow-red-200/50 dark:shadow-red-900/30 shadow-lg' :
-                  isPending ? 'border-yellow-500 shadow-yellow-200/50 dark:shadow-yellow-900/30 shadow-lg' :
                   'border-gray-200 dark:border-gray-700'
                 }`}
               >
@@ -244,9 +249,8 @@ export default function AgentProgress({ promptId, onComplete }: AgentProgressPro
                     <div className="flex items-center gap-4">
                       <div className={`p-3 rounded-full transition-all duration-300 ${
                         isCompleted ? 'bg-green-100 dark:bg-green-900/30' :
-                        isActive ? 'bg-blue-100 dark:bg-blue-900/30' :
+                        isActive ? 'bg-yellow-100 dark:bg-yellow-900/30' :
                         isFailed ? 'bg-red-100 dark:bg-red-900/30' :
-                        isPending ? 'bg-yellow-100 dark:bg-yellow-900/30' :
                         'bg-gray-100 dark:bg-gray-700'
                       }`}>
                         {isActive ? (
@@ -286,10 +290,10 @@ export default function AgentProgress({ promptId, onComplete }: AgentProgressPro
                     {(isActive || isCompleted || isFailed) && (
                       <div className={`px-3 py-1 rounded-full text-xs font-medium ${
                         isCompleted ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' :
-                        isActive ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' :
+                        isActive ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300' :
                         'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
                       }`}>
-                        {stage.status.toUpperCase()}
+                        {isActive ? 'PENDING' : stage.status.toUpperCase()}
                       </div>
                     )}
                   </div>

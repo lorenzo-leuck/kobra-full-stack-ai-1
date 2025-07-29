@@ -121,7 +121,13 @@ class WorkflowOrchestrator:
         self._create_prompt_in_db()
         
         # Initialize workflow status tracking
-        self._initialize_workflow_status()
+        status_id = self._initialize_workflow_status()
+        if not status_id:
+            return {
+                'success': False,
+                'error': "Failed to initialize workflow status tracking",
+                'prompt_id': str(self.prompt_id)
+            }
         
         # Small delay to allow WebSocket connection to establish
         await asyncio.sleep(1)

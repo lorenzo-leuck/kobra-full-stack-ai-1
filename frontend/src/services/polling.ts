@@ -68,11 +68,10 @@ export class PollingService {
           this.lastStatus.status !== prompt.status ||
           this.lastStatus.overall_progress !== overall_progress) {
         
-        console.log('📈 Status update detected:', {
+        console.log('Status update:', {
           status: prompt.status,
           progress: overall_progress,
-          stage: current_stage,
-          raw_response: { overall_progress, sessions: sessions?.length }
+          stage: current_stage
         });
 
         // Use backend progress percentage as primary source
