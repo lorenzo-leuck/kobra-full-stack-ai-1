@@ -2,6 +2,17 @@
 
 AI-driven platform for fetching, evaluating, and displaying images that match user-provided prompts
 
+<img src="https://img.shields.io/badge/React-v19.1.0-61DAFB?style=for-the-badge&logo=react&logoColor=white" alt="React v19.1.0" />
+<img src="https://img.shields.io/badge/TypeScript-v5.2.2-007ACC?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript v5.2.2" />
+<img src="https://img.shields.io/badge/FastAPI-v0.116.1-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI v0.116.1" />
+<img src="https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.11+" />
+<img src="https://img.shields.io/badge/MongoDB-v4.13.2-47A248?style=for-the-badge&logo=mongodb&logoColor=white" alt="MongoDB v4.13.2" />
+<img src="https://img.shields.io/badge/Tailwind_CSS-v3.4.3-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white" alt="Tailwind CSS v3.4.3" />
+<img src="https://img.shields.io/badge/Vite-v5.2.0-646CFF?style=for-the-badge&logo=vite&logoColor=white" alt="Vite v5.2.0" />
+<img src="https://img.shields.io/badge/Playwright-v1.54.0-2EAD33?style=for-the-badge&logo=playwright&logoColor=white" alt="Playwright v1.54.0" />
+<img src="https://img.shields.io/badge/OpenAI-GPT--4o-412991?style=for-the-badge&logo=openai&logoColor=white" alt="OpenAI GPT-4o" />
+<img src="https://img.shields.io/badge/Docker-latest-2CA5E0?style=for-the-badge&logo=docker&logoColor=white" alt="Docker" />
+
 # Setup
 
 ## Requirements
