@@ -32,9 +32,10 @@ Create a `.env` file in the project root with:
 
 ```
 OPENAI_API_KEY=your_openai_api_key
-MONGODB_URI=your_mongodb_connection_string
-PIN_USERNAME=your_pinterest_username
-PIN_PASSWORD=your_pinterest_password
+MONGODB_URL=your_mongodb_connection_string
+MONGODB_DBNAME=your_mongodb_dbname
+PINTEREST_USERNAME=your_pinterest_username
+PINTEREST_PASSWORD=your_pinterest_password
 ```
 
 ## Run App Locally
@@ -91,7 +92,7 @@ python3 scripts/pinterest.py "visual prompt" [num_images] [options]
 python3 scripts/pinterest.py "boho minimalist bedroom" 10
 
 # Headless mode with custom output name
-python3 scripts/pinterest.py "80s rappers" 15 --headless --output-name vintage_hip_hop
+python3 scripts/pinterest.py "cozy interior" 15 --headless --output-name cozy_interior
 ```
 
 **Options:**
@@ -128,150 +129,69 @@ python3 scripts/database.py --status         # Show database status
 
 ## Backend
 
-The backend for the AI-powered Pinterest scraper system uses FastAPI, Pydantic, and Playwright to scrape Pinterest images based on visual prompts and evaluate their relevance using AI.
+The backend is a FastAPI-based system that orchestrates Pinterest scraping, AI validation, and real-time progress tracking. It implements a three-phase workflow: warmup, scraping, and validation.
 
-### Technologies
+### Key Technologies
 
-**FastAPI + Python**: Backend framework chosen for high performance, easy-to-use async capabilities, automatic OpenAPI documentation, and type checking with Pydantic.
+- **FastAPI + Python**: High-performance async framework with automatic OpenAPI documentation
+- **MongoDB + pymongo**: Document database for storing prompts, sessions, pins, and progress
+- **Playwright**: Headless browser automation for Pinterest interaction
+- **OpenAI GPT-4o**: Multimodal AI for image evaluation with structured responses
+- **Pydantic**: Type-safe data validation and AI response parsing
 
-**MongoDB with pymongo**: Synchronous MongoDB client for storing prompts, sessions, pins, and agent configurations in dedicated collections with specific schemas. Uses MongoDB ObjectId for document references and relationship management.
-
-**Playwright**: Headless browser automation for Pinterest scraping, simulating user behavior to align with visual prompts.
-
-**Pydantic AI**: Chosen over LangChain and LlamaIndex for AI integration due to its **actual structured output** rather than "wishful thinking" approaches. Provides:
-- **Type-safe AI responses**: Guaranteed structured output with Pydantic models
-- **Multimodal support**: Native image analysis with GPT-4o vision capabilities
-- **Reliable validation**: Built-in validation and error handling for AI responses
-- **Configurable settings**: Temperature, model selection, and prompt management
-- **Production-ready**: No complex chains or unreliable parsing - just clean, predictable AI integration
-
-**OpenAI GPT-4o**: Multimodal model for evaluating image-prompt matching with both visual analysis and textual context understanding.
-
-### MongoDB Collections
-
-The application uses five MongoDB collections with the following schemas:
-
-1. **prompts**:
-   - `_id`: ObjectId - Unique identifier
-   - `text`: string - The visual prompt text
-   - `created_at`: ISODate - When the prompt was created
-   - `status`: enum("pending", "ready", "completed", "error") - Current status
-
-2. **sessions** (3 documents per prompt):
-   - `_id`: ObjectId - Unique identifier
-   - `prompt_id`: ObjectId - Reference to the prompt
-   - `stage`: enum("warmup", "scraping", "validation") - Workflow stage
-   - `status`: enum("pending", "completed", "failed") - Session status
-   - `timestamp`: ISODate - Last updated timestamp
-   - `log`: array[string] - Timestamped log messages for this stage
-
-3. **pins**:
-   - `_id`: ObjectId - Unique identifier
-   - `prompt_id`: ObjectId - Reference to the prompt
-   - `image_url`: string - Pinterest CDN image URL
-   - `pin_url`: string - Original Pinterest pin URL
-   - `title`: string - Pin title (enriched from pin page)
-   - `description`: string - Pin description/alt text
-   - `match_score`: number - AI evaluation score (0.0-1.0)
-   - `status`: enum("ready", "approved", "disqualified") - Processing/evaluation status
-   - `ai_explanation`: string - AI reasoning for the score
-   - `metadata`: object - Collection metadata with timestamps
-
-4. **status** (1 document per prompt):
-   - `_id`: ObjectId - Unique identifier
-   - `prompt_id`: ObjectId - Reference to the prompt
-   - `overall_status`: enum("pending", "running", "completed", "failed") - Workflow status
-   - `current_step`: number - Current step number (equals total_steps when completed)
-   - `total_steps`: number - Total number of workflow steps (equals message count)
-   - `progress`: number - Progress percentage (0.0-100.0)
-   - `messages`: array[string] - Step-by-step progress messages
-   - `started_at`: ISODate - Workflow start timestamp
-   - `completed_at`: ISODate - Workflow completion timestamp
-
-5. **agents**:
-   - `_id`: ObjectId - Unique identifier
-   - `title`: string - Agent identifier (e.g., "pin-evaluator")
-   - `model`: string - AI model name (e.g., "gpt-4o")
-   - `system_prompt`: string - System prompt for the AI agent
-   - `user_prompt_template`: string - Template for user prompts with placeholders
-   - `temperature`: float - AI response temperature (0.0-2.0)
-   - `metadata`: object - Creation/update timestamps and version info
-
-### Folder Structure
+### Backend Structure
 
 ```
 backend/
 ├── app/
-│   ├── __init__.py
+│   ├── config.py            # Environment configuration
 │   ├── main.py              # FastAPI application entry point
-│   ├── config.py            # Configuration settings (MongoDB, Pinterest, OpenAI)
-│   ├── database/            # Database layer with MongoDB integration
-│   │   ├── __init__.py      # Exports all database classes
-│   │   ├── base.py          # BaseDB with common CRUD operations
-│   │   ├── prompts.py       # PromptDB + PromptSchema
-│   │   ├── sessions.py      # SessionDB + SessionSchema (3 docs per prompt)
-│   │   ├── pins.py          # PinDB + PinSchema + PinMetadata
-│   │   ├── status.py        # StatusDB + StatusSchema (1 doc per prompt)
-│   │   └── agents.py        # AgentDB + AgentSchema (AI configuration)
-│   ├── models/              # Pydantic models (legacy)
-│   │   ├── __init__.py
-│   │   ├── prompt.py        # Prompt model with MongoDB ObjectId
-│   │   ├── session.py       # Session model for tracking processing stages
-│   │   └── pin.py           # Pin model with expanded fields
-│   ├── routers/             # API endpoints
-│   │   ├── __init__.py
-│   │   ├── prompts.py       # Prompt management endpoints
-│   │   ├── sessions.py      # Session tracking endpoints
-│   │   └── pins.py          # Pin management with filtering
+│   ├── database/            # MongoDB data layer
+│   │   ├── base.py          # BaseDB class with CRUD operations
+│   │   ├── prompts.py       # PromptDB for user prompts
+│   │   ├── sessions.py      # SessionDB for workflow stages
+│   │   ├── pins.py          # PinDB for Pinterest images
+│   │   ├── status.py        # StatusDB for progress tracking
+│   │   └── agents.py        # AgentDB for AI configurations
+│   ├── routes/              # API endpoints
+│   │   └── main.py          # All REST endpoints
 │   └── services/            # Business logic
-│       ├── __init__.py
-│       ├── workflow/        # Workflow orchestration
-│       │   ├── __init__.py
-│       │   └── main.py      # WorkflowOrchestrator + PinterestWorkflowHandler
-│       ├── pinterest/       # Pinterest scraping services
-│       │   ├── __init__.py
-│       │   ├── session.py   # Browser session management
-│       │   ├── warmup.py    # Pinterest algorithm warm-up
-│       │   └── pins.py      # Pin data extraction & enrichment
-│       └── ai/              # AI evaluation services
-│           ├── __init__.py
-│           └── evaluator.py # Image-prompt matching with explanations
-├── scripts/                 # Standalone scripts
-│   ├── workflow.py          # Complete workflow orchestrator (recommended)
-│   ├── database.py          # Database management and setup
-│   ├── pinterest.py         # Legacy Pinterest scraping CLI
-│   ├── download.py          # Image download utilities
-│   └── pydantic_setup.py    # Pydantic AI setup script
-├── exports/                 # Generated data exports
-│   └── warmup_*/            # Per-prompt export folders
-├── requirements.txt         # Project dependencies
-└── .env.example             # Example environment variables
+│       ├── pinterest/       # Pinterest automation
+│       │   ├── auth.py      # Pinterest login/session
+│       │   ├── warmup.py    # Algorithm training
+│       │   └── scraper.py   # Image collection
+│       ├── ai/              # AI validation
+│       │   └── evaluator.py # GPT-4o image analysis
+│       ├── workflow/        # Orchestration
+│       │   └── main.py      # WorkflowOrchestrator
+
+└── scripts/                 # Standalone utilities
+    ├── workflow.py          # Complete workflow runner
+    ├── database.py          # DB management
+    └── pinterest.py         # Direct Pinterest CLI
 ```
 
-### Workflow Orchestrator Architecture
+### Three-Phase Workflow
 
-The system uses a modular workflow orchestrator with comprehensive status tracking and session management:
+1. **Pinterest Warmup (0-33%)**: Train algorithm by engaging with 5 relevant pins
+2. **Image Scraping (33-66%)**: Collect 20+ images from homepage and search
+3. **AI Validation (66-100%)**: Evaluate images with GPT-4o for relevance
 
-**WorkflowOrchestrator**:
-- Generic orchestration class that coordinates different services
-- Manages prompt creation and database persistence
-- Provides clean interfaces: `run_pinterest_workflow()`, `run_ai_validation_workflow()`
-- Comprehensive status tracking with step-by-step progress
-- Error recovery and graceful failure handling
+### Real-Time Progress
 
-**PinterestWorkflowHandler**:
-- Pinterest-specific implementation with 3-phase workflow
-- **Phase 1**: Warmup (creates warmup session)
-- **Phase 2**: Scraping + Enrichment (creates scraping session)
-- **Phase 3**: AI Validation (creates validation session)
-- Integrates with database layer for data persistence
-- Handles Pinterest authentication and session management
+- **StatusDB**: Central progress tracking (0-100% with timestamped messages)
+- **Polling Architecture**: Frontend polls `/api/prompts/{id}/status` every 2 seconds
+- **Session Tracking**: Individual progress for warmup, scraping, validation phases
 
-**Status & Session Tracking**:
-- **Status Collection**: 1 document per prompt with overall progress (0-100%)
-- **Sessions Collection**: 3 documents per prompt (warmup, scraping, validation)
-- **Real-time Updates**: Step-by-step progress messages and completion tracking
-- **Error Handling**: Detailed error messages and failure point identification
+### Database Collections
+
+- **prompts**: User visual prompts and overall status
+- **sessions**: Phase-specific progress (warmup/scraping/validation)
+- **pins**: Pinterest images with AI scores and classifications
+- **status**: Real-time workflow progress tracking
+- **agents**: AI model configurations and prompts
+
+> **📖 Detailed Documentation**: See [docs/backend.md](docs/backend.md) for complete API reference, database schemas, service architecture, and configuration details.
 
 ## Frontend
 
@@ -285,17 +205,44 @@ Modern React + TypeScript frontend with three-phase user experience:
 
 ### Architecture
 ```
-frontend/src/
-├── components/
-│   ├── PromptSubmission.tsx   # Initial prompt input form
-│   ├── AgentProgress.tsx       # Real-time workflow progress with polling
-│   ├── ImageReview.tsx         # Pin gallery with filtering and validation results
-│   └── ThemeToggle.tsx         # Dark/light mode toggle
-├── services/
-│   ├── api.ts                 # REST API service layer
-│   └── polling.ts             # Polling service for real-time updates
-├── types/index.ts             # TypeScript interfaces
-└── App.tsx                    # Main application router
+frontend/
+├── src/
+│   ├── components/
+│   │   ├── AgentProgress.tsx      # Real-time workflow progress with polling
+│   │   ├── ErrorBoundary.tsx      # Error handling wrapper component
+│   │   ├── HistorySidebar.tsx     # Hamburger menu with prompt history
+│   │   ├── ImageReview.tsx        # Pin gallery with filtering and validation results
+│   │   ├── LoadingSpinner.tsx     # Reusable loading animation component
+│   │   ├── PromptSubmission.tsx   # Initial prompt input form
+│   │   ├── ScoreBar.tsx           # AI match score visualization
+│   │   ├── StatusBadge.tsx        # Status indicator badges
+│   │   └── ThemeToggle.tsx        # Dark/light mode toggle
+│   ├── services/
+│   │   ├── api.ts                 # REST API service layer
+│   │   └── polling.ts             # Polling service for real-time updates
+│   ├── hooks/
+│   │   └── useTheme.ts            # Custom hook for theme management
+│   ├── types/
+│   │   └── index.ts               # TypeScript interfaces and types
+│   ├── assets/
+│   │   └── react.svg              # Static assets
+│   ├── App.tsx                    # Main application router and state
+│   ├── App.css                    # Global application styles
+│   ├── main.tsx                   # React application entry point
+│   ├── index.css                  # Global CSS with Tailwind imports
+│   └── vite-env.d.ts              # Vite environment type definitions
+├── public/
+│   └── vite.svg                   # Public static assets
+├── components.json                # shadcn/ui component configuration
+├── eslint.config.js               # ESLint configuration
+├── postcss.config.js              # PostCSS configuration
+├── tailwind.config.js             # Tailwind CSS configuration
+├── tsconfig.json                  # TypeScript configuration
+├── tsconfig.node.json             # Node-specific TypeScript config
+├── vite.config.ts                 # Vite build configuration
+├── package.json                   # Dependencies and scripts
+├── Dockerfile                     # Docker container configuration
+└── index.html                     # HTML entry point
 ```
 
 ### Real-Time Updates with Polling
@@ -367,41 +314,6 @@ The frontend uses polling-based architecture for real-time workflow progress upd
 - `PUT /api/pins/{pin_id}/status` - Update pin status (approved/disqualified)
 - `GET /api/sessions/prompt/{prompt_id}` - Get processing sessions for a prompt
 - `GET /api/sessions/{session_id}` - Get a specific processing session
-
-## Frontend
-
-The frontend for the AI-powered Pinterest scraper system uses Vite, TypeScript, and React to provide a modern, responsive, and user-friendly interface for interacting with the backend API.
-
-### Technologies
-
-**Vite + TypeScript + React**: Chosen for fast development experience with hot module replacement, excellent TypeScript support, and modern build tooling. Vite provides lightning-fast dev server startup and optimized production builds.
-
-**Shadcn/ui**: Modern component library built on Radix UI primitives with Tailwind CSS styling. Provides accessible, customizable components with consistent design system and excellent developer experience.
-
-**Tailwind CSS**: Utility-first CSS framework for rapid UI development with consistent spacing, colors, and responsive design patterns.
-
-### Folder Structure
-
-```
-frontend/
-├── public/                 # Static assets served directly
-│   └── vite.svg           # Vite logo
-├── src/                   # Source code
-│   ├── assets/            # Static assets (images, fonts, etc.)
-│   ├── App.tsx            # Main application component
-│   ├── App.css            # Application-specific styles
-│   ├── main.tsx           # Application entry point
-│   ├── index.css          # Global styles with Tailwind imports
-│   └── vite-env.d.ts      # Vite environment type definitions
-├── components.json        # Shadcn/ui configuration
-├── tailwind.config.js     # Tailwind CSS configuration
-├── postcss.config.js      # PostCSS configuration for Tailwind
-├── vite.config.ts         # Vite build configuration
-├── tsconfig.json          # TypeScript configuration
-├── tsconfig.app.json      # App-specific TypeScript config
-├── tsconfig.node.json     # Node-specific TypeScript config
-└── package.json           # Dependencies and scripts
-```
 
 # Warm-up Logic
 
@@ -520,8 +432,8 @@ The Pinterest scraping system implements a sophisticated warm-up strategy to ali
 * 0.6 - Pinterest workflow orchestrator with warmup and scraping phases
 * 0.7 - AI validation system with GPT-4o multimodal analysis
 * 0.8 - Status tracking and session management for real-time progress
-* 0.9 - WebSocket real-time updates and comprehensive workflow integration
-* 1.0 - Polling-based architecture replacing WebSocket for improved reliability
+* 0.9 - Comprehensive workflow integration with real-time progress tracking
+* 1.0 - Polling-based architecture for improved reliability and simplified deployment
 
 # License
 
