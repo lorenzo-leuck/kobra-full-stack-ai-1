@@ -413,6 +413,11 @@ The Pinterest scraping system implements a sophisticated warm-up strategy to ali
 * **0.30** - AWS setup (Cloud deployment)
 * **1.0** - Production deployment (AWS EC2 + Docker)
 
+# Considerations
+
+This project demonstrates how to connect web development with AI systems, focusing on the integration between a React/TypeScript frontend, FastAPI backend, AI services for content validation, web scraping automation, and MongoDB persistence with polling-based real-time updates. The main goal was to show how these technologies can work together in a cohesive full-stack application. I hope it represents the best tech available to the date, though I'm aware the scenario is evolving very fast - for example, today Playwright may be excellent for scraping and browser automation, but tomorrow MCP technologies might evolve to a point where you can fully control browsers with natural language. We must also try our best to keep up!
+
+Also, while this project covers the core integration patterns, a real startup showcase would benefit from additional production measures. This would include tests and git hooks for better team workflow, separate repositories for frontend and backend with independent deployment pipelines, proper CORS and API key management, comprehensive user management systems with permission-based access control, and paid subscription models for revenue generation with usage tracking and billing integration.
 
 # License
 

@@ -4,37 +4,6 @@
 
 The backend is a FastAPI-based system that orchestrates Pinterest scraping, AI validation, and real-time progress tracking. It uses MongoDB for data persistence and implements a three-phase workflow: warmup, scraping, and validation.
 
-## Architecture
-
-```
-backend/
-├── app/
-│   ├── config.py              # Environment configuration
-│   ├── main.py                # FastAPI application entry point
-│   ├── database/              # MongoDB data layer
-│   │   ├── base.py           # BaseDB class with CRUD operations
-│   │   ├── prompts.py        # PromptDB for user prompts
-│   │   ├── sessions.py       # SessionDB for workflow stages
-│   │   ├── pins.py           # PinDB for Pinterest images
-│   │   ├── status.py         # StatusDB for progress tracking
-│   │   └── agents.py         # AgentDB for AI configurations
-│   ├── routes/               # API endpoints
-│   │   └── main.py          # All REST endpoints
-│   └── services/             # Business logic
-│       ├── pinterest/        # Pinterest automation
-│       │   ├── auth.py      # Pinterest login/session
-│       │   ├── warmup.py    # Algorithm training
-│       │   └── scraper.py   # Image collection
-│       ├── ai/              # AI validation
-│       │   └── evaluator.py # GPT-4o image analysis
-│       ├── workflow/        # Orchestration
-│       │   └── main.py     # WorkflowOrchestrator
-
-└── scripts/                 # Standalone utilities
-    ├── workflow.py         # Complete workflow runner
-    ├── database.py         # DB management
-    └── pinterest.py        # Direct Pinterest CLI
-```
 
 ## Database Layer
 
