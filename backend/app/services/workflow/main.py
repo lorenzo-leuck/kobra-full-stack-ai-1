@@ -46,84 +46,32 @@ class WorkflowOrchestrator:
     
     async def setStatus(self, status: str, message: str = None, progress_percentage: float = None) -> None:
         """
-        Update workflow status and send WebSocket update
+        Update workflow status in database for polling
         """
         if not self.prompt_id:
             return
         
         try:
             from ...database.status import StatusDB
-            from app.services.websocket import websocket_manager
             
-            # Debug: Verify same WebSocketManager instance
-            print(f"📡 WORKFLOW WebSocketManager instance ID: {id(websocket_manager)}")
+            # Debug logging
+            print(f"🔄 setStatus called: status={status}, progress={progress_percentage}, message={message}")
             
             # Update status in database
-            StatusDB.update_step_status(
+            result = StatusDB.update_step_status(
                 prompt_id=str(self.prompt_id),
                 status=status,
                 message=message,
                 progress=progress_percentage
             )
             
-            self._log(f"Status updated: {status} - {message}")
-            
-            # Get current status from database for WebSocket update (after database update)
-            status_db = StatusDB()
-            current_status = status_db.get_workflow_progress(str(self.prompt_id))
-            
-            # Send WebSocket update with frontend-expected format
-            # Always use values from database to ensure consistency
-            status_data = {
-                "prompt_id": str(self.prompt_id),
-                "overall_status": current_status.get('overall_status', status),
-                "current_step": current_status.get('current_step', 0),
-                "total_steps": current_status.get('total_steps', 0),
-                "progress": current_status.get('progress', 0),
-                "messages": current_status.get('messages', [])
-            }
-            
-            print(f"📡 Sending WebSocket status update for prompt {self.prompt_id}: {status_data}")
-            await websocket_manager.send_status_update(
-                prompt_id=str(self.prompt_id),
-                status_data=status_data
-            )
-            print(f"📡 WebSocket status update sent successfully")
+            print(f"📊 Status update result: {result}")
+            self._log(f"Status updated: {status} - {message} (progress: {progress_percentage}%)")
             
         except Exception as e:
             self._log(f"Failed to update status: {e}")
     
-    async def _send_session_update(self, session_id: str, stage: str, status: str) -> None:
-        """
-        Send session update via WebSocket
-        """
-        if not self.prompt_id:
-            return
-        try:
-            from app.services.websocket import websocket_manager
-            from ...database.sessions import SessionDB
-            
-            # Get current session logs
-            session = SessionDB.get_session(self.current_session_id)
-            session_logs = session.get('log', []) if session else []
-            
-            session_data = {
-                "prompt_id": str(self.prompt_id),
-                "session_id": str(self.current_session_id),
-                "stage": stage,
-                "status": status,
-                "logs": session_logs
-            }
-            
-            print(f"📡 Sending WebSocket session update for prompt {self.prompt_id}: {session_data}")
-            await websocket_manager.send_session_update(
-                prompt_id=str(self.prompt_id),
-                session_data=session_data
-            )
-            print(f"📡 WebSocket session update sent successfully")
-            
-        except Exception as e:
-            self._log(f"Failed to send session update: {e}")
+    # Session updates are now handled via polling - no WebSocket needed
     
     def _initialize_workflow_status(self) -> str:
         """Initialize workflow status tracking"""
@@ -252,16 +200,16 @@ class WorkflowOrchestrator:
             self.current_session_id = session_id
             
             # Step: Initialization
-            await self.setStatus("running", "Initializing AI validation system")
+            await self.setStatus("running", "Initializing AI validation system", progress_percentage=70.0)
             self._log("=== AI VALIDATION PHASE ===")
             self._log(f"Starting AI validation for prompt: {prompt_doc['text']}")
             
             # Initialize AI evaluator
             evaluator = AIEvaluator()
-            await self.setStatus("completed", "AI validation system initialized", progress_percentage=100.0)
+            await self.setStatus("running", "AI validation system initialized", progress_percentage=75.0)
             
             # Step: Evaluation
-            await self.setStatus("running", "Evaluating pins with AI model")
+            await self.setStatus("running", "Evaluating pins with AI model", progress_percentage=80.0)
             result = await evaluator.evaluate_pins_for_prompt(prompt_id)
             await self.setStatus("completed", f"Evaluated {result.get('evaluated_count', 0)} pins", progress_percentage=100.0)
             
@@ -278,7 +226,7 @@ class WorkflowOrchestrator:
                 # Send WebSocket session update
                 session_data = SessionDB.get_session(session_id)
                 session_logs = session_data.get('log', []) if session_data else []
-                await self._send_session_update("validation", "completed", session_logs)
+                # Session updates now handled via polling
                 
                 await self.setStatus("completed", f"Validation completed: {result['approved_count']} approved, {result['disqualified_count']} disqualified", 
                              progress_percentage=100.0)
@@ -304,7 +252,7 @@ class WorkflowOrchestrator:
                 # Send WebSocket session update
                 session_data = SessionDB.get_session(session_id)
                 session_logs = session_data.get('log', []) if session_data else []
-                await self._send_session_update("validation", "failed", session_logs)
+                # Session updates now handled via polling
                 
                 PromptDB.update_prompt_status(prompt_id, "error")
                 
@@ -322,7 +270,7 @@ class WorkflowOrchestrator:
                 # Send WebSocket session update
                 session_data = SessionDB.get_session(self.current_session_id)
                 session_logs = session_data.get('log', []) if session_data else []
-                await self._send_session_update("validation", "failed", session_logs)
+                # Session updates now handled via polling
             
             return {
                 "success": False,
@@ -378,10 +326,24 @@ class PinterestWorkflowHandler:
         try:
             self._log("Initializing Pinterest session...")
             
+            # Create progress callback that updates status
+            def progress_callback_sync(progress_percentage):
+                if self.orchestrator:
+                    # Create a task to run the async setStatus call
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        # If we're in an async context, schedule the coroutine
+                        asyncio.create_task(self.orchestrator.setStatus("running", f"Pinterest warmup progress: {progress_percentage:.1f}%", progress_percentage=progress_percentage))
+                    else:
+                        # If not in async context, run it
+                        loop.run_until_complete(self.orchestrator.setStatus("running", f"Pinterest warmup progress: {progress_percentage:.1f}%", progress_percentage=progress_percentage))
+            
             self.warmup_session = PinterestWarmup(
                 prompt=self.prompt,
                 username=self.username,
-                password=self.password
+                password=self.password,
+                log_callback=self._log,
+                progress_callback=progress_callback_sync
             )
             
             self._log("Starting browser...")
@@ -427,7 +389,7 @@ class PinterestWorkflowHandler:
         try:
             # Update status to running
             if self.orchestrator:
-                await self.orchestrator.setStatus("running", "Starting Pinterest algorithm warmup")
+                await self.orchestrator.setStatus("running", "Starting Pinterest algorithm warmup", progress_percentage=10.0)
             
             self._log(f"Starting warmup phase for prompt: '{self.prompt}'")
             
@@ -441,11 +403,11 @@ class PinterestWorkflowHandler:
                 if self.orchestrator:
                     session_data = SessionDB.get_session(self.current_session_id)
                     session_logs = session_data.get('log', []) if session_data else []
-                    await self.orchestrator._send_session_update("warmup", "completed", session_logs)
+                    # Session updates now handled via polling
                 
-                # Update status to completed
+                # Update status to completed with 33% progress (1/3 phases done)
                 if self.orchestrator:
-                    await self.orchestrator.setStatus("completed", "Pinterest algorithm warmup completed successfully")
+                    await self.orchestrator.setStatus("completed", "Pinterest algorithm warmup completed successfully", progress_percentage=33.0)
                 
                 return True
             else:
@@ -456,7 +418,7 @@ class PinterestWorkflowHandler:
                 if self.orchestrator:
                     session_data = SessionDB.get_session(self.current_session_id)
                     session_logs = session_data.get('log', []) if session_data else []
-                    await self.orchestrator._send_session_update("warmup", "failed", session_logs)
+                    # Session updates now handled via polling
                 
                 # Update status to failed
                 if self.orchestrator:
@@ -499,29 +461,34 @@ class PinterestWorkflowHandler:
         try:
             # Update status to running
             if self.orchestrator:
-                await self.orchestrator.setStatus("running", f"Starting scraping phase - collecting {num_images} pins")
+                await self.orchestrator.setStatus("running", "Starting Pinterest image scraping", progress_percentage=40.0)
             
+            self._log("=== SCRAPING PHASE ===")
             self._log(f"Starting scraping phase - collecting {num_images} pins")
             
             # Navigate to Pinterest feed after warmup
             self._log("Refreshing Pinterest feed...")
+            if self.orchestrator:
+                await self.orchestrator.setStatus("running", "Refreshing Pinterest feed...", progress_percentage=45.0)
             await self.warmup_session.page.goto("https://www.pinterest.com/", timeout=30000)
             await asyncio.sleep(3)
             
             # Scrape pins from feed
+            if self.orchestrator:
+                await self.orchestrator.setStatus("running", f"Collecting {num_images} pins from feed...", progress_percentage=50.0)
             pin_data = await self.pins_handler.scrape_feed(num_images=num_images)
             
-            if pin_data:
+            if pin_data and len(pin_data) > 0:
                 self._log(f"Scraping completed - found {len(pin_data)} pins")
                 
                 # Save pins to database
                 pin_ids = PinDB.create_pins_from_scraped_data(self.prompt_id, pin_data)
                 self._log(f"Saved {len(pin_ids)} pins to database")
                 
-                # Update status to completed
+                # Update status to completed with 66% progress (2/3 phases done)
                 if self.orchestrator:
                     await self.orchestrator.setStatus("completed", f"Scraping completed - found {len(pin_data)} pins", 
-                                              progress_percentage=100.0)
+                                              progress_percentage=66.0)
                 
                 SessionDB.update_session_status(self.scraping_session_id, "completed")
                 
@@ -529,7 +496,7 @@ class PinterestWorkflowHandler:
                 if self.orchestrator:
                     session_data = SessionDB.get_session(self.scraping_session_id)
                     session_logs = session_data.get('log', []) if session_data else []
-                    await self.orchestrator._send_session_update("scraping", "completed", session_logs)
+                    # Session updates now handled via polling
                 
                 return pin_ids
             else:
@@ -540,7 +507,7 @@ class PinterestWorkflowHandler:
                 if self.orchestrator:
                     session_data = SessionDB.get_session(self.scraping_session_id)
                     session_logs = session_data.get('log', []) if session_data else []
-                    await self.orchestrator._send_session_update("scraping", "failed", session_logs)
+                    # Session updates now handled via polling
                 
                 # Update status to failed
                 if self.orchestrator:
@@ -552,11 +519,7 @@ class PinterestWorkflowHandler:
             self._log(f"Scraping phase error: {e}")
             SessionDB.update_session_status(self.scraping_session_id, "failed")
             
-            # Send WebSocket session update
-            if self.orchestrator:
-                session_data = SessionDB.get_session(self.scraping_session_id)
-                session_logs = session_data.get('log', []) if session_data else []
-                await self.orchestrator._send_session_update("scraping", "failed", session_logs)
+            # Session updates now handled via polling
             
             # Update status to failed
             if self.orchestrator:
@@ -652,7 +615,7 @@ class PinterestWorkflowHandler:
             SessionDB.update_session_status(enrichment_session_id, "failed")
             return False
     
-    async def run_complete_workflow(self, num_images: int = 20, headless: bool = True) -> Dict:
+    async def run_complete_workflow(self, num_images: int = 5, headless: bool = True) -> Dict:
         """
         Execute the complete Pinterest workflow: warmup -> scraping -> enrichment
         

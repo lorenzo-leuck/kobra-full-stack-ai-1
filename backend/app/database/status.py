@@ -1,8 +1,11 @@
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict
 from datetime import datetime
 from pydantic import BaseModel, Field
-from bson import ObjectId
-
+try:
+    from bson import ObjectId
+except ImportError:
+    # Fallback for environments without pymongo
+    ObjectId = str
 from .base import BaseDB
 
 
@@ -28,13 +31,18 @@ class StatusDB(BaseDB):
     @classmethod
     def create_workflow_status(cls, prompt_id: str) -> str:
         """Create a new workflow status document (only if one doesn't exist)"""
+        prompt_id_obj = ObjectId(prompt_id)
+        
         # Check if status document already exists
-        existing = cls.get_one({"prompt_id": ObjectId(prompt_id)})
+        existing = cls.get_one({"prompt_id": prompt_id_obj})
         if existing:
             return str(existing["_id"])
         
+        # Clean up any duplicate status documents for this prompt_id
+        cls.collection.delete_many({"prompt_id": prompt_id_obj})
+        
         status_data = {
-            "prompt_id": ObjectId(prompt_id),
+            "prompt_id": prompt_id_obj,
             "overall_status": "pending",
             "current_step": 0,
             "total_steps": 0,  # Will be updated as messages are added
@@ -60,18 +68,20 @@ class StatusDB(BaseDB):
         }
         
         if message:
-            # Add message and calculate proper step counts
+            # Add message and increment current step
             current_messages = current_doc.get("messages", [])
-            new_total_steps = len(current_messages) + 1  # Total messages after adding this one
+            current_step = current_doc.get("current_step", 0)
+            total_steps = current_doc.get("total_steps", 0)
             
             update_data["$push"] = {"messages": message}
-            update_data["total_steps"] = new_total_steps
             
-            # Current step should equal total steps when completed, otherwise it's the count of messages
-            if status == "completed":
-                update_data["current_step"] = new_total_steps
-            else:
-                update_data["current_step"] = new_total_steps
+            # Increment current step
+            new_current_step = current_step + 1
+            update_data["current_step"] = new_current_step
+            
+            # Only update total_steps if it's less than current_step (to handle dynamic workflows)
+            if total_steps < new_current_step:
+                update_data["total_steps"] = new_current_step
         
         if progress is not None:
             update_data["progress"] = progress
@@ -127,12 +137,13 @@ class StatusDB(BaseDB):
         all_docs.sort(key=lambda x: (len(x.get("messages", [])), x.get("started_at", datetime.min)), reverse=True)
         
         # Keep the first one (most complete), delete the rest
-        keep_doc = all_docs[0]
+        keep_doc_id = all_docs[0]["_id"]
         delete_ids = [doc["_id"] for doc in all_docs[1:]]
         
         if delete_ids:
             collection = cls.get_collection()
             result = collection.delete_many({"_id": {"$in": delete_ids}})
+            print(f"Kept status document {keep_doc_id}, deleted {result.deleted_count} duplicates")
             return result.deleted_count
         
         return 0

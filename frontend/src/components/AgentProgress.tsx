@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { CheckCircle, Clock, AlertCircle, Loader2, Heart, Search, Brain } from 'lucide-react';
 import ThemeToggle from './ThemeToggle';
-import { websocketService } from '../services/websocket';
+import { pollingService } from '../services/polling';
 import { ApiService } from '../services/api';
 
 interface AgentProgressProps {
@@ -51,43 +51,25 @@ export default function AgentProgress({ promptId, onComplete }: AgentProgressPro
   ]);
 
   const [overallProgress, setOverallProgress] = useState(0);
-  const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected' | 'error'>('connecting');
+  const [pollingStatus, setPollingStatus] = useState<'starting' | 'active' | 'stopped' | 'error'>('starting');
   const [currentStatus, setCurrentStatus] = useState('');
   const [isCompleted, setIsCompleted] = useState(false);
 
   useEffect(() => {
     let mounted = true;
 
-    const connectWebSocket = async () => {
-      try {
-        console.log('🔄 Attempting to connect WebSocket for prompt:', promptId);
-        setConnectionStatus('connecting');
-        await websocketService.connect(promptId);
-        
-        if (mounted) {
-          console.log('✅ WebSocket connected successfully');
-          setConnectionStatus('connected');
-        }
-      } catch (error) {
-        console.error('❌ Failed to connect WebSocket:', error);
-        if (mounted) {
-          setConnectionStatus('error');
-        }
-      }
-    };
-
-    const handleWebSocketMessage = (message: any) => {
+    const handlePollingMessage = (message: any) => {
       if (!mounted) return;
 
-      console.log('🎯 Processing WebSocket message:', message.type, message.data);
+      console.log('🎯 Processing polling message:', message.type, message.data);
 
       if (message.type === 'status_update') {
-        const { overall_status, progress, messages, current_step, total_steps } = message.data;
+        const { overall_status, progress, messages } = message.data;
         
-        console.log('📊 Status update:', { overall_status, progress, current_step, total_steps, messages });
+        console.log('📊 Status update:', { overall_status, progress, messages });
         
         setOverallProgress(progress);
-        setCurrentStatus(messages[messages.length - 1] || 'Processing...1');
+        setCurrentStatus(messages[messages.length - 1] || 'Processing...');
         
         if (overall_status === 'completed') {
           console.log('🎉 Workflow completed!');
@@ -98,8 +80,6 @@ export default function AgentProgress({ promptId, onComplete }: AgentProgressPro
             if (mounted) onComplete();
           }, delay);
         }
-
-        // Stage status is now updated via session_update messages
       }
 
       if (message.type === 'session_update') {
@@ -139,6 +119,7 @@ export default function AgentProgress({ promptId, onComplete }: AgentProgressPro
     // Initial status fetch
     const fetchInitialStatus = async () => {
       try {
+        console.log('📊 Fetching initial status for prompt:', promptId);
         const statusData = await ApiService.getPromptStatus(promptId);
         setOverallProgress(statusData.overall_progress || 0);
         
@@ -160,21 +141,27 @@ export default function AgentProgress({ promptId, onComplete }: AgentProgressPro
         }
       } catch (error) {
         console.error('Failed to fetch initial status:', error);
+        setPollingStatus('error');
       }
     };
 
-    connectWebSocket();
+    // Start polling
+    console.log('🔄 Starting polling for prompt:', promptId);
+    setPollingStatus('starting');
     
-    console.log('🔊 Adding WebSocket listener');
-    websocketService.addListener(handleWebSocketMessage);
+    pollingService.addListener(handlePollingMessage);
+    pollingService.start(promptId);
+    setPollingStatus('active');
 
+    // Fetch initial status
     fetchInitialStatus();
 
     return () => {
-      console.log('🧹 Cleaning up WebSocket connection');
+      console.log('🧹 Cleaning up polling service');
       mounted = false;
-      websocketService.removeListener(handleWebSocketMessage);
-      websocketService.disconnect();
+      pollingService.removeListener(handlePollingMessage);
+      pollingService.stop();
+      setPollingStatus('stopped');
     };
   }, [promptId, onComplete]);
 
@@ -205,9 +192,9 @@ export default function AgentProgress({ promptId, onComplete }: AgentProgressPro
             <h2 className="text-xl font-semibold text-gray-800 dark:text-white">Overall Progress</h2>
             <div className="flex items-center gap-3">
               <div className={`w-2 h-2 rounded-full ${
-                connectionStatus === 'connected' ? 'bg-green-500' :
-                connectionStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' :
-                connectionStatus === 'error' ? 'bg-red-500' : 'bg-gray-400'
+                pollingStatus === 'active' ? 'bg-green-500' :
+                pollingStatus === 'starting' ? 'bg-yellow-500 animate-pulse' :
+                pollingStatus === 'error' ? 'bg-red-500' : 'bg-gray-400'
               }`} />
               <span className="text-sm font-medium text-gray-600 dark:text-gray-300">{Math.round(overallProgress)}%</span>
             </div>
@@ -227,44 +214,113 @@ export default function AgentProgress({ promptId, onComplete }: AgentProgressPro
         </div>
 
         <div className="space-y-6">
-          {stages.map((stage) => (
-            <div key={stage.id} className="bg-white/80 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-4">
-                    <div className={`p-3 rounded-full ${
-                      stage.status === 'completed' ? 'bg-green-100 dark:bg-green-900/30' :
-                      stage.status === 'active' ? 'bg-blue-100 dark:bg-blue-900/30' :
-                      stage.status === 'failed' ? 'bg-red-100 dark:bg-red-900/30' : 'bg-gray-100 dark:bg-gray-700'
-                    }`}>
-                      {stage.status === 'pending' ? stage.icon : getStatusIcon(stage.status)}
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-800 dark:text-white">{stage.name}</h3>
-                      <p className="text-gray-600 dark:text-gray-300">{stage.description}</p>
-                    </div>
-                  </div>
-
-                </div>
-
-
-
-                {stage.logs && stage.logs.length > 0 && (
-                  <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 mt-4">
-                    <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Activity Log</h4>
-                    <div className="space-y-1">
-                      {stage.logs.map((log, logIndex) => (
-                        <div key={logIndex} className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-2">
-                          <div className="w-1.5 h-1.5 bg-gray-400 dark:bg-gray-500 rounded-full flex-shrink-0" />
-                          {log}
+          {stages.map((stage) => {
+            const isCompleted = stage.status === 'completed';
+            const isActive = stage.status === 'active';
+            const isPending = stage.status === 'pending';
+            const isFailed = stage.status === 'failed';
+            
+            return (
+              <div 
+                key={stage.id} 
+                className={`bg-white/80 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl border-2 transition-all duration-300 overflow-hidden ${
+                  isCompleted ? 'border-green-500 shadow-green-200/50 dark:shadow-green-900/30 shadow-lg' :
+                  isActive ? 'border-blue-500 shadow-blue-200/50 dark:shadow-blue-900/30 shadow-lg animate-pulse' :
+                  isFailed ? 'border-red-500 shadow-red-200/50 dark:shadow-red-900/30 shadow-lg' :
+                  'border-gray-200 dark:border-gray-700'
+                }`}
+              >
+                <div className="p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-4">
+                      <div className={`p-3 rounded-full transition-all duration-300 ${
+                        isCompleted ? 'bg-green-100 dark:bg-green-900/30' :
+                        isActive ? 'bg-blue-100 dark:bg-blue-900/30' :
+                        isFailed ? 'bg-red-100 dark:bg-red-900/30' : 
+                        'bg-gray-100 dark:bg-gray-700'
+                      }`}>
+                        {isPending ? (
+                          <div className="relative">
+                            {stage.icon}
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <div className="w-6 h-6 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
+                            </div>
+                          </div>
+                        ) : (
+                          getStatusIcon(stage.status)
+                        )}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-lg font-semibold text-gray-800 dark:text-white">{stage.name}</h3>
+                          {isActive && (
+                            <div className="flex items-center gap-1">
+                              <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+                              <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">ACTIVE</span>
+                            </div>
+                          )}
+                          {isCompleted && (
+                            <div className="flex items-center gap-1">
+                              <div className="w-2 h-2 bg-green-500 rounded-full" />
+                              <span className="text-xs text-green-600 dark:text-green-400 font-medium">COMPLETED</span>
+                            </div>
+                          )}
                         </div>
-                      ))}
+                        <p className="text-gray-600 dark:text-gray-300">{stage.description}</p>
+                      </div>
+                    </div>
+                    
+                    {/* Status indicator */}
+                    <div className={`px-3 py-1 rounded-full text-xs font-medium ${
+                      isCompleted ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' :
+                      isActive ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' :
+                      isFailed ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' :
+                      'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                    }`}>
+                      {stage.status.toUpperCase()}
                     </div>
                   </div>
-                )}
+
+                  {/* Progress bar for active stage */}
+                  {isActive && (
+                    <div className="mb-4">
+                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                        <div className="h-2 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full animate-pulse" style={{ width: '60%' }} />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Activity logs */}
+                  {stage.logs && stage.logs.length > 0 && (
+                    <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 mt-4">
+                      <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 bg-blue-500 rounded-full" />
+                        Activity Log
+                      </h4>
+                      <div className="space-y-2 max-h-32 overflow-y-auto">
+                        {stage.logs.map((log, logIndex) => (
+                          <div key={logIndex} className="text-sm text-gray-600 dark:text-gray-400 flex items-start gap-2">
+                            <div className="w-1.5 h-1.5 bg-gray-400 dark:bg-gray-500 rounded-full flex-shrink-0 mt-1.5" />
+                            <span className="leading-relaxed">{log}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Empty state for pending stages */}
+                  {isPending && (!stage.logs || stage.logs.length === 0) && (
+                    <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 mt-4 text-center">
+                      <div className="text-sm text-gray-500 dark:text-gray-400 flex items-center justify-center gap-2">
+                        <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
+                        Waiting to start...
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>

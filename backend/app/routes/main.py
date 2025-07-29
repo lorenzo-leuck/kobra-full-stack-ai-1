@@ -1,13 +1,11 @@
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse
-from fastapi.websockets import WebSocketDisconnect
 from pydantic import BaseModel
 from bson import ObjectId
 import asyncio
 
 from ..services.workflow.main import WorkflowOrchestrator
 from ..database.prompts import PromptDB
-from app.services.websocket import websocket_manager
 
 router = APIRouter(
     prefix="/api",
@@ -116,115 +114,7 @@ async def create_prompt(prompt_request: PromptRequest, background_tasks: Backgro
             detail=f"Failed to create prompt: {str(e)}"
         )
 
-@router.websocket("/ws/{prompt_id}")
-async def websocket_endpoint(websocket: WebSocket, prompt_id: str):
-    """
-    WebSocket endpoint for real-time status updates for a specific prompt.
-    """
-    try:
-        print(f"🎯 WEBSOCKET ENDPOINT REACHED for prompt {prompt_id}")
-        print(f"🎯 WebSocket object: {websocket}")
-        print(f"🎯 About to call websocket_manager.connect()")
-        
-        # Debug: Check websocket_manager state before connection
-        print(f"📡 WebSocketManager instance ID: {id(websocket_manager)}")
-        print(f"📡 WebSocketManager before connect: {websocket_manager}")
-        print(f"📡 Active connections before connect: {list(websocket_manager.active_connections.keys())}")
-        
-        # Use WebSocketManager.connect() method which handles accept() and registration
-        await websocket_manager.connect(websocket, prompt_id)
-        
-        print(f"📡 WebSocket connected and registered for prompt {prompt_id}")
-        print(f"📡 Active connections after registration: {len(websocket_manager.active_connections.get(prompt_id, set()))}")
-        print(f"📡 All active connections: {list(websocket_manager.active_connections.keys())}")
-        
-        # Verify the connection is actually there
-        if prompt_id in websocket_manager.active_connections:
-            print(f"📡 ✅ Connection verified in manager for prompt {prompt_id}")
-        else:
-            print(f"📡 ❌ Connection NOT found in manager for prompt {prompt_id}")
-        
-        # Send current status immediately upon connection to catch up
-        try:
-            from ..database.status import StatusDB
-            from ..database.sessions import SessionDB
-            
-            # Get current status
-            status_data = StatusDB.get_workflow_progress(prompt_id)
-            if status_data:
-                print(f"📡 Sending initial status update: {status_data}")
-                await websocket_manager.send_status_update(
-                    prompt_id=prompt_id,
-                    status_data={
-                        "prompt_id": prompt_id,
-                        "overall_status": status_data.get('overall_status', 'pending'),
-                        "current_step": status_data.get('current_step', 0),
-                        "total_steps": status_data.get('total_steps', 0),
-                        "progress": status_data.get('progress', 0),
-                        "messages": status_data.get('messages', [])
-                    }
-                )
-            
-            # Send current session updates
-            sessions = SessionDB.get_sessions_by_prompt(ObjectId(prompt_id))
-            for session in sessions:
-                session_data = {
-                    "prompt_id": prompt_id,
-                    "session_id": str(session['_id']),
-                    "stage": session['stage'],
-                    "status": session['status'],
-                    "logs": session.get('log', [])
-                }
-                print(f"📡 Sending initial session update: {session_data}")
-                await websocket_manager.send_session_update(
-                    prompt_id=prompt_id,
-                    session_data=session_data
-                )
-                
-        except Exception as e:
-            print(f"📡 Failed to send initial status: {e}")
-        
-        # Keep connection alive with proper async handling
-        print(f"📡 Starting WebSocket keep-alive loop for prompt {prompt_id}")
-        print(f"📡 Active connections after setup: {len(websocket_manager.active_connections.get(prompt_id, set()))}")
-        
-        try:
-            # Keep the connection alive by waiting for disconnect
-            while True:
-                try:
-                    # Use receive() instead of receive_text() to handle different message types
-                    message = await websocket.receive()
-                    print(f"📡 Received WebSocket message: {message}")
-                    
-                    # Handle different message types
-                    if message["type"] == "websocket.disconnect":
-                        print(f"📡 WebSocket disconnect message received for prompt {prompt_id}")
-                        break
-                    elif message["type"] == "websocket.receive":
-                        # Handle text messages if needed
-                        if "text" in message:
-                            print(f"📡 Received text: {message['text']}")
-                        
-                except WebSocketDisconnect:
-                    print(f"📡 WebSocket disconnected for prompt {prompt_id}")
-                    break
-                except Exception as e:
-                    print(f"📡 WebSocket error for prompt {prompt_id}: {type(e).__name__}: {e}")
-                    break
-        except Exception as outer_e:
-            print(f"📡 Outer WebSocket error for prompt {prompt_id}: {type(outer_e).__name__}: {outer_e}")
-    
-    except WebSocketDisconnect:
-        print(f"📡 WebSocket disconnected normally for prompt {prompt_id}")
-    except Exception as e:
-        print(f"📡 TOP-LEVEL WebSocket error for prompt {prompt_id}: {type(e).__name__}: {e}")
-        import traceback
-        traceback.print_exc()
-    finally:
-        # Clean up connection using WebSocketManager
-        print(f"📡 Cleaning up WebSocket connection for prompt {prompt_id}")
-        websocket_manager.disconnect(websocket, prompt_id)
-        print(f"📡 WebSocket cleanup completed for prompt {prompt_id}")
+# WebSocket endpoint removed - now using polling for status updates
 
 @router.get("/prompts/{prompt_id}/status")
 async def get_prompt_status(prompt_id: str):

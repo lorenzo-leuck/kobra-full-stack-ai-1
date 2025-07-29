@@ -287,70 +287,48 @@ Modern React + TypeScript frontend with three-phase user experience:
 ```
 frontend/src/
 ├── components/
-│   ├── PromptSubmission.tsx    # Landing page with prompt input
-│   ├── AgentProgress.tsx       # Real-time workflow progress with WebSocket
-│   ├── ImageReview.tsx         # Results gallery with filtering
-│   ├── LoadingSpinner.tsx      # Reusable loading component
-│   ├── StatusBadge.tsx         # Pin approval status
-│   ├── ScoreBar.tsx           # AI match score visualization
-│   └── ErrorBoundary.tsx      # Error handling
+│   ├── PromptSubmission.tsx   # Initial prompt input form
+│   ├── AgentProgress.tsx       # Real-time workflow progress with polling
+│   ├── ImageReview.tsx         # Pin gallery with filtering and validation results
+│   └── ThemeToggle.tsx         # Dark/light mode toggle
 ├── services/
 │   ├── api.ts                 # REST API service layer
-│   └── websocket.ts           # WebSocket service for real-time updates
+│   └── polling.ts             # Polling service for real-time updates
 ├── types/index.ts             # TypeScript interfaces
 └── App.tsx                    # Main application router
 ```
 
-### Real-Time Updates with WebSocket
+### Real-Time Updates with Polling
 
-The frontend uses WebSocket connections for real-time workflow progress updates:
+The frontend uses polling-based architecture for real-time workflow progress updates:
 
-**WebSocket Service** (`/services/websocket.ts`):
-- Manages WebSocket connections per prompt ID
-- Handles automatic reconnection with exponential backoff
-- Type-safe message handling with TypeScript interfaces
-- Connection status monitoring (connecting, connected, error, disconnected)
+**Polling Service** (`/services/polling.ts`):
+- Polls `/api/prompts/{prompt_id}/status` endpoint every 2 seconds
+- Converts API responses to message format compatible with UI components
+- Handles automatic cleanup when workflow completes or fails
+- Exponential backoff on errors for robust error handling
 
 **Message Types**:
 ```typescript
-// Status updates from workflow orchestrator
-interface StatusUpdate {
-  type: 'status_update';
-  data: {
-    prompt_id: string;
-    overall_status: string;
-    current_step: number;
-    total_steps: number;
-    progress: number;        // 0-100 percentage
-    messages: string[];      // Step-by-step progress messages
-  };
-}
 
-// Session updates from individual workflow phases
-interface SessionUpdate {
-  type: 'session_update';
-  data: {
-    prompt_id: string;
-    session_id: string;
-    stage: 'warmup' | 'scraping' | 'validation';
-    status: string;
-    logs: string[];          // Phase-specific log messages
-  };
-}
-```
+**AgentProgress Component**:
+- Starts polling service on component mount
+- Updates progress bars, stage status, and activity logs in real-time
+- Handles workflow completion and automatic redirect to results
+- Proper cleanup and polling termination on component unmount
 
-**Integration Flow**:
-1. User submits prompt → POST `/api/prompts` → workflow starts in background
-2. Frontend connects to WebSocket endpoint `/api/ws/{prompt_id}`
-3. Backend broadcasts real-time updates during workflow execution
-4. Frontend updates progress bars, status messages, and stage indicators
+**Workflow**:
+1. User submits prompt via PromptSubmission component
+2. Frontend starts polling `/api/prompts/{prompt_id}/status` every 2 seconds
+3. Backend updates database with real-time progress during workflow execution
+4. Frontend receives status updates and updates progress bars, status messages, and stage indicators
 5. Workflow completion triggers automatic transition to results view
 
 **Benefits**:
-- ✅ **Real-time feedback**: Immediate progress updates without polling
-- ✅ **Efficient**: Single WebSocket connection vs multiple HTTP requests
-- ✅ **Responsive**: Live progress bars and status indicators
-- ✅ **Reliable**: Automatic reconnection and error handling
+- ✅ **Reliable**: No connection drops or complex connection management
+- ✅ **Simple**: Standard HTTP requests, easier to debug and maintain
+- ✅ **Stateless**: Each poll gets complete current state from database
+- ✅ **Robust**: Automatic error handling and retry logic
 - ✅ **Type-safe**: Full TypeScript support for message handling
 
 ### User Flow
@@ -539,6 +517,11 @@ The Pinterest scraping system implements a sophisticated warm-up strategy to ali
 * 0.3 - Backend setup
 * 0.4 - Docker compose setup
 * 0.5 - MongoDB schema implementation with collections for prompts, sessions, and pins
+* 0.6 - Pinterest workflow orchestrator with warmup and scraping phases
+* 0.7 - AI validation system with GPT-4o multimodal analysis
+* 0.8 - Status tracking and session management for real-time progress
+* 0.9 - WebSocket real-time updates and comprehensive workflow integration
+* 1.0 - Polling-based architecture replacing WebSocket for improved reliability
 
 # License
 
