@@ -1,4 +1,4 @@
-# Full-Stack AI Software Engineer (Platform) – Take-Home Assessment
+# Full-Stack AI Software Engineer Platform
 
 AI-driven platform for fetching, evaluating, and displaying images that match user-provided prompts
 
