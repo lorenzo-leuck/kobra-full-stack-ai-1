@@ -10,7 +10,6 @@ class PinterestWarmup(PinterestSession):
     
     async def feed_algorithm(self, num_clicks=None):
         """
-        Fixed warm-up: search for prompt, click 5 pins and react to them
         """
         if not self.page:
             if self.log_callback:
@@ -20,7 +19,7 @@ class PinterestWarmup(PinterestSession):
             return False
         
         # Always do exactly 5 warmup clicks
-        warmup_clicks = 5
+        warmup_clicks = 6
         
         try:
             self.log_callback(f"Starting warm-up for prompt: '{self.prompt}' - will click {warmup_clicks} pins")
@@ -43,7 +42,6 @@ class PinterestWarmup(PinterestSession):
                     
                     # Update progress: 10% + (i/warmup_clicks * 23%) = 10% to 33%
                     progress = 10.0 + (i / warmup_clicks) * 23.0
-                    self.log_callback(f"📈 Progress update: {progress:.1f}% (pin {i+1}/{warmup_clicks})")
                     if self.progress_callback:
                         self.progress_callback(progress)
                     else:

@@ -88,3 +88,21 @@ class PromptDB(BaseDB):
             List[dict]: List of prompt documents
         """
         return cls.get_many({"status": status}, sort_by="created_at", sort_order=-1)
+    
+    @classmethod
+    def get_recent_prompts(cls, limit: int = 20) -> List[dict]:
+        """
+        Get recent prompts for history dropdown
+        
+        Args:
+            limit (int): Maximum number of prompts to return
+            
+        Returns:
+            List[dict]: List of recent prompt documents, sorted by most recent first
+        """
+        return cls.get_many(
+            filter_dict={},
+            sort_by="created_at", 
+            sort_order=-1,
+            limit=limit
+        )

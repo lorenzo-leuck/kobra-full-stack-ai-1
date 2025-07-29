@@ -116,6 +116,39 @@ async def create_prompt(prompt_request: PromptRequest, background_tasks: Backgro
 
 # WebSocket endpoint removed - now using polling for status updates
 
+@router.get("/prompts/history")
+async def get_prompt_history(limit: int = 20):
+    """
+    Get recent prompts for history dropdown.
+    Returns prompts sorted by most recent first.
+    """
+    try:
+        from ..database.prompts import PromptDB
+        
+        # Get recent prompts with limit
+        prompts = PromptDB.get_recent_prompts(limit=limit)
+        
+        # Format for frontend
+        formatted_prompts = []
+        for prompt in prompts:
+            formatted_prompts.append({
+                '_id': str(prompt['_id']),
+                'text': prompt['text'],
+                'status': prompt['status'],
+                'created_at': prompt.get('created_at', ''),
+            })
+            
+        return {
+            'prompts': formatted_prompts,
+            'total_count': len(formatted_prompts)
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get prompt history: {str(e)}"
+        )
+
 @router.get("/prompts/{prompt_id}/status")
 async def get_prompt_status(prompt_id: str):
     """

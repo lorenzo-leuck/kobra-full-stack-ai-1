@@ -73,8 +73,11 @@ export class ApiService {
     return response.json();
   }
 
-  static async getPromptHistory(): Promise<Prompt[]> {
-    const response = await fetch(`${API_BASE_URL}/prompts`);
+  static async getPromptHistory(limit: number = 20): Promise<{
+    prompts: Prompt[];
+    total_count: number;
+  }> {
+    const response = await fetch(`${API_BASE_URL}/prompts/history?limit=${limit}`);
 
     if (!response.ok) {
       throw new Error(`Failed to get prompt history: ${response.statusText}`);

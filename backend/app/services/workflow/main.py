@@ -78,13 +78,28 @@ class WorkflowOrchestrator:
         try:
             from ...database.status import StatusDB
             
+            print(f"🔧 Initializing workflow status for prompt_id: {self.prompt_id}")
+            
             self.current_status_id = StatusDB.create_workflow_status(
                 prompt_id=str(self.prompt_id)
+            )
+            
+            print(f"✅ Status document created with ID: {self.current_status_id}")
+            
+            # Immediately set initial status
+            StatusDB.update_step_status(
+                prompt_id=str(self.prompt_id),
+                status="pending",
+                message="Workflow initialized",
+                progress=0.0
             )
             
             return self.current_status_id
             
         except Exception as e:
+            print(f"❌ Failed to initialize status tracking: {e}")
+            import traceback
+            traceback.print_exc()
             self._log(f"Failed to initialize status tracking: {e}")
             return None
     
@@ -333,10 +348,10 @@ class PinterestWorkflowHandler:
                     loop = asyncio.get_event_loop()
                     if loop.is_running():
                         # If we're in an async context, schedule the coroutine
-                        asyncio.create_task(self.orchestrator.setStatus("running", f"Pinterest warmup progress: {progress_percentage:.1f}%", progress_percentage=progress_percentage))
+                        asyncio.create_task(self.orchestrator.setStatus("running", None, progress_percentage=progress_percentage))
                     else:
                         # If not in async context, run it
-                        loop.run_until_complete(self.orchestrator.setStatus("running", f"Pinterest warmup progress: {progress_percentage:.1f}%", progress_percentage=progress_percentage))
+                        loop.run_until_complete(self.orchestrator.setStatus("running", None, progress_percentage=progress_percentage))
             
             self.warmup_session = PinterestWarmup(
                 prompt=self.prompt,
@@ -488,9 +503,9 @@ class PinterestWorkflowHandler:
                 pin_ids = PinDB.create_pins_from_scraped_data(self.prompt_id, pin_data)
                 self._log(f"Saved {len(pin_ids)} pins to database")
                 
-                # Update status to completed with 66% progress (2/3 phases done)
+                # Update status to running with 66% progress (2/3 phases done)
                 if self.orchestrator:
-                    await self.orchestrator.setStatus("completed", f"Scraping completed - found {len(pin_data)} pins", 
+                    await self.orchestrator.setStatus("running", f"Scraping completed - found {len(pin_data)} pins", 
                                               progress_percentage=66.0)
                 
                 SessionDB.update_session_status(self.scraping_session_id, "completed")

@@ -1,19 +1,28 @@
 import { useState } from 'react';
-import { Search, Sparkles, ArrowRight } from 'lucide-react';
+import { Search, Sparkles, ArrowRight, Menu } from 'lucide-react';
 import ThemeToggle from './ThemeToggle';
+import HistorySidebar from './HistorySidebar';
 
 interface PromptSubmissionProps {
   onSubmit: (prompt: string) => void;
   isLoading: boolean;
+  onHistorySelect?: (promptId: string) => void;
 }
 
-export default function PromptSubmission({ onSubmit, isLoading }: PromptSubmissionProps) {
+export default function PromptSubmission({ onSubmit, isLoading, onHistorySelect }: PromptSubmissionProps) {
   const [prompt, setPrompt] = useState('');
+  const [showHistorySidebar, setShowHistorySidebar] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (prompt.trim() && !isLoading) {
       onSubmit(prompt.trim());
+    }
+  };
+
+  const handleHistorySelect = (promptId: string) => {
+    if (onHistorySelect) {
+      onHistorySelect(promptId);
     }
   };
 
@@ -28,18 +37,27 @@ export default function PromptSubmission({ onSubmit, isLoading }: PromptSubmissi
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 dark:bg-gradient-to-br dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex items-center justify-center p-4 relative">
       <ThemeToggle />
+      
+      {/* Hamburger menu - positioned in top left */}
+      <button
+        onClick={() => setShowHistorySidebar(true)}
+        className="fixed top-6 left-6 p-3 rounded-full bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border border-gray-200 dark:border-gray-700 hover:bg-white dark:hover:bg-gray-700 shadow-lg transition-all duration-200 z-50"
+        title="View prompt history"
+      >
+        <Menu className="w-5 h-5 text-gray-700 dark:text-gray-300" />
+      </button>
+      
       <div className="max-w-2xl w-full">
-        <div className="text-center mb-12">
-          <div className="flex items-center justify-center mb-6">
-            <div className="bg-gradient-to-r from-purple-600 to-pink-600 p-4 rounded-full">
-              <Sparkles className="w-8 h-8 text-white" />
-            </div>
+        {/* Header - now centered without hamburger menu */}
+        <div className="text-center mb-8">
+          <div className="flex items-center justify-center gap-3 mb-4">
+            <Sparkles className="w-8 h-8 text-purple-600 dark:text-purple-400" />
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+              AI Pinterest Curator
+            </h1>
           </div>
-          <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-4">
-            Pinterest AI Curator
-          </h1>
-          <p className="text-xl text-gray-600 dark:text-gray-300 max-w-lg mx-auto">
-            Enhance your feed with ai-driven visual discovery
+          <p className="text-gray-600 dark:text-gray-300 text-lg max-w-2xl mx-auto">
+            Discover and validate Pinterest images with AI-powered visual matching
           </p>
         </div>
 
@@ -64,7 +82,7 @@ export default function PromptSubmission({ onSubmit, isLoading }: PromptSubmissi
               {isLoading ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Processing...10
+                  Processing...
                 </>
               ) : (
                 <>
@@ -95,6 +113,13 @@ export default function PromptSubmission({ onSubmit, isLoading }: PromptSubmissi
           </div>
         </div>
       </div>
+      
+      {/* History Sidebar */}
+      <HistorySidebar 
+        isOpen={showHistorySidebar}
+        onClose={() => setShowHistorySidebar(false)}
+        onPromptSelect={handleHistorySelect}
+      />
     </div>
   );
 }

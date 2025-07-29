@@ -58,13 +58,19 @@ class StatusDB(BaseDB):
     @classmethod
     def update_step_status(cls, prompt_id: str, status: str, message: str = None, progress: float = None) -> bool:
         """Update workflow status"""
-        print(f"🔍 StatusDB.update_step_status called: prompt_id={prompt_id}, status={status}, progress={progress}")
+        print(f"🔍 StatusDB.update_step_status called: prompt_id={prompt_id}, status={status}, progress={progress}, message={message}")
         
         # First, get current document to calculate proper step counts
         current_doc = cls.get_one({"prompt_id": ObjectId(prompt_id)})
         if not current_doc:
             print(f"❌ No status document found for prompt_id: {prompt_id}")
-            return False
+            # Create the status document if it doesn't exist
+            print(f"🔄 Creating status document for prompt_id: {prompt_id}")
+            cls.create_workflow_status(prompt_id)
+            current_doc = cls.get_one({"prompt_id": ObjectId(prompt_id)})
+            if not current_doc:
+                print(f"❌ Failed to create status document")
+                return False
         
         print(f"✅ Found status document: {current_doc.get('_id')}")
         
@@ -72,9 +78,9 @@ class StatusDB(BaseDB):
             "overall_status": status
         }
         
+        # Always add message if provided (removed the filtering)
         if message:
             # Add message and increment current step
-            current_messages = current_doc.get("messages", [])
             current_step = current_doc.get("current_step", 0)
             total_steps = current_doc.get("total_steps", 0)
             
@@ -88,8 +94,10 @@ class StatusDB(BaseDB):
             if total_steps < new_current_step:
                 update_data["total_steps"] = new_current_step
         
+        # ALWAYS update progress if provided
         if progress is not None:
-            update_data["progress"] = progress
+            update_data["progress"] = float(progress)
+            print(f"📊 Setting progress to: {progress}")
         
         if status == "completed":
             update_data["completed_at"] = datetime.now()
@@ -116,6 +124,14 @@ class StatusDB(BaseDB):
             )
         
         print(f"📊 Update result: {result}")
+        
+        # Verify the update by reading back the document
+        updated_doc = cls.get_one({"prompt_id": ObjectId(prompt_id)})
+        if updated_doc:
+            print(f"✅ Verified update - progress now: {updated_doc.get('progress')}, status: {updated_doc.get('overall_status')}")
+        else:
+            print(f"❌ Could not verify update - document not found")
+        
         return result  # cls.update_one already returns boolean
     
     @classmethod

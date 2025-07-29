@@ -75,14 +75,18 @@ export class PollingService {
           raw_response: { overall_progress, sessions: sessions?.length }
         });
 
-        // Use actual backend progress percentage
-        let progressPercentage = overall_progress || 0;
+        // Use backend progress percentage as primary source
+        let progressPercentage = overall_progress;
         
-        // Only fallback to session-based calculation if no progress provided
-        if (progressPercentage === 0 && sessions && sessions.length > 0) {
-          const completedSessions = sessions.filter(s => s.status === 'completed').length;
-          const totalSessions = 3; // warmup, scraping, validation
-          progressPercentage = (completedSessions / totalSessions) * 100;
+        // If backend doesn't provide progress, calculate from sessions
+        if (progressPercentage === undefined || progressPercentage === null) {
+          if (sessions && sessions.length > 0) {
+            const completedSessions = sessions.filter(s => s.status === 'completed').length;
+            const totalSessions = 3; // warmup, scraping, validation
+            progressPercentage = (completedSessions / totalSessions) * 100;
+          } else {
+            progressPercentage = 0;
+          }
         }
         
         // If workflow is completed, ensure 100%

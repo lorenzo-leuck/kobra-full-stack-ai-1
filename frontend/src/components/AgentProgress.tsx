@@ -24,7 +24,7 @@ export default function AgentProgress({ promptId, onComplete }: AgentProgressPro
     {
       id: 'warmup',
       name: 'Pinterest Warm-up',
-      description: 'Pinterest account warm-up',
+      description: '',
       icon: <Heart className="w-5 h-5" />,
       status: 'pending',
       progress: 0,
@@ -33,7 +33,7 @@ export default function AgentProgress({ promptId, onComplete }: AgentProgressPro
     {
       id: 'scraping',
       name: 'Image Collection',
-      description: 'Pinterest image collection',
+      description: '',
       icon: <Search className="w-5 h-5" />,
       status: 'pending',
       progress: 0,
@@ -42,7 +42,7 @@ export default function AgentProgress({ promptId, onComplete }: AgentProgressPro
     {
       id: 'validation',
       name: 'AI Validation',
-      description: 'AI image validation',
+      description: '',
       icon: <Brain className="w-5 h-5" />,
       status: 'pending',
       progress: 0,
@@ -199,7 +199,7 @@ export default function AgentProgress({ promptId, onComplete }: AgentProgressPro
               <span className="text-sm font-medium text-gray-600 dark:text-gray-300">{Math.round(overallProgress)}%</span>
             </div>
           </div>
-          <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 mb-4">
+          <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 mb-4 relative overflow-hidden">
             <div 
               className={`h-3 rounded-full transition-all duration-500 ease-out ${
                 isCompleted ? 'bg-gradient-to-r from-green-500 to-emerald-600' :
@@ -207,6 +207,12 @@ export default function AgentProgress({ promptId, onComplete }: AgentProgressPro
               }`}
               style={{ width: `${overallProgress}%` }}
             />
+            {/* Loading shimmer animation when progress is 0% or very low */}
+            {overallProgress <= 5 && !isCompleted && (
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-pulse">
+                <div className="h-full w-full bg-gradient-to-r from-blue-400/30 via-purple-400/30 to-blue-400/30 animate-shimmer" />
+              </div>
+            )}
           </div>
           {currentStatus && currentStatus !== 'pending' && (
             <div className="text-sm text-gray-600 dark:text-gray-400">
@@ -229,6 +235,7 @@ export default function AgentProgress({ promptId, onComplete }: AgentProgressPro
                   isCompleted ? 'border-green-500 shadow-green-200/50 dark:shadow-green-900/30 shadow-lg' :
                   isActive ? 'border-blue-500 shadow-blue-200/50 dark:shadow-blue-900/30 shadow-lg animate-pulse' :
                   isFailed ? 'border-red-500 shadow-red-200/50 dark:shadow-red-900/30 shadow-lg' :
+                  isPending ? 'border-yellow-500 shadow-yellow-200/50 dark:shadow-yellow-900/30 shadow-lg' :
                   'border-gray-200 dark:border-gray-700'
                 }`}
               >
@@ -238,7 +245,8 @@ export default function AgentProgress({ promptId, onComplete }: AgentProgressPro
                       <div className={`p-3 rounded-full transition-all duration-300 ${
                         isCompleted ? 'bg-green-100 dark:bg-green-900/30' :
                         isActive ? 'bg-blue-100 dark:bg-blue-900/30' :
-                        isFailed ? 'bg-red-100 dark:bg-red-900/30' : 
+                        isFailed ? 'bg-red-100 dark:bg-red-900/30' :
+                        isPending ? 'bg-yellow-100 dark:bg-yellow-900/30' :
                         'bg-gray-100 dark:bg-gray-700'
                       }`}>
                         {isActive ? (

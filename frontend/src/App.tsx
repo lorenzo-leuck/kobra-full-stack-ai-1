@@ -48,6 +48,19 @@ function App() {
     setPromptId('');
   };
 
+  const handleHistorySelect = async (selectedPromptId: string) => {
+    try {
+      // Fetch the prompt details to get the original text
+      const response = await ApiService.getPromptStatus(selectedPromptId);
+      setCurrentPrompt(response.prompt?.text || '');
+      setPromptId(selectedPromptId);
+      setCurrentState('review');
+    } catch (error) {
+      console.error('Failed to load prompt history:', error);
+      alert('Failed to load prompt. Please try again.');
+    }
+  };
+
   return (
     <ErrorBoundary>
       <div className="App min-h-screen">
@@ -55,6 +68,7 @@ function App() {
           <PromptSubmission 
             onSubmit={handlePromptSubmit} 
             isLoading={isLoading}
+            onHistorySelect={handleHistorySelect}
           />
         )}
         
