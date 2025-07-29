@@ -458,6 +458,9 @@ class PinterestWorkflowHandler:
         # Keep track of scraping session separately
         self.scraping_session_id = scraping_session_id
         
+        # Update current session to scraping session for logging
+        self.current_session_id = scraping_session_id
+        
         try:
             # Update status to running
             if self.orchestrator:

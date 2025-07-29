@@ -24,7 +24,7 @@ export default function AgentProgress({ promptId, onComplete }: AgentProgressPro
     {
       id: 'warmup',
       name: 'Pinterest Warm-up',
-      description: 'Engaging with Pinterest to align recommendations',
+      description: 'Pinterest account warm-up',
       icon: <Heart className="w-5 h-5" />,
       status: 'pending',
       progress: 0,
@@ -33,7 +33,7 @@ export default function AgentProgress({ promptId, onComplete }: AgentProgressPro
     {
       id: 'scraping',
       name: 'Image Collection',
-      description: 'Scraping top image results from Pinterest',
+      description: 'Pinterest image collection',
       icon: <Search className="w-5 h-5" />,
       status: 'pending',
       progress: 0,
@@ -42,7 +42,7 @@ export default function AgentProgress({ promptId, onComplete }: AgentProgressPro
     {
       id: 'validation',
       name: 'AI Validation',
-      description: 'Validating images with AI model',
+      description: 'AI image validation',
       icon: <Brain className="w-5 h-5" />,
       status: 'pending',
       progress: 0,
@@ -208,9 +208,11 @@ export default function AgentProgress({ promptId, onComplete }: AgentProgressPro
               style={{ width: `${overallProgress}%` }}
             />
           </div>
-          <div className="text-sm text-gray-600 dark:text-gray-400">
-            {currentStatus}
-          </div>
+          {currentStatus && currentStatus !== 'pending' && (
+            <div className="text-sm text-gray-600 dark:text-gray-400">
+              {currentStatus}
+            </div>
+          )}
         </div>
 
         <div className="space-y-6">
@@ -239,13 +241,15 @@ export default function AgentProgress({ promptId, onComplete }: AgentProgressPro
                         isFailed ? 'bg-red-100 dark:bg-red-900/30' : 
                         'bg-gray-100 dark:bg-gray-700'
                       }`}>
-                        {isPending ? (
+                        {isActive ? (
                           <div className="relative">
                             {stage.icon}
                             <div className="absolute inset-0 flex items-center justify-center">
                               <div className="w-6 h-6 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
                             </div>
                           </div>
+                        ) : isPending ? (
+                          stage.icon
                         ) : (
                           getStatusIcon(stage.status)
                         )}
@@ -270,15 +274,16 @@ export default function AgentProgress({ promptId, onComplete }: AgentProgressPro
                       </div>
                     </div>
                     
-                    {/* Status indicator */}
-                    <div className={`px-3 py-1 rounded-full text-xs font-medium ${
-                      isCompleted ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' :
-                      isActive ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' :
-                      isFailed ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' :
-                      'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
-                    }`}>
-                      {stage.status.toUpperCase()}
-                    </div>
+                    {/* Status indicator - only show for active, completed, or failed */}
+                    {(isActive || isCompleted || isFailed) && (
+                      <div className={`px-3 py-1 rounded-full text-xs font-medium ${
+                        isCompleted ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' :
+                        isActive ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' :
+                        'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+                      }`}>
+                        {stage.status.toUpperCase()}
+                      </div>
+                    )}
                   </div>
 
                   {/* Progress bar for active stage */}
@@ -308,15 +313,7 @@ export default function AgentProgress({ promptId, onComplete }: AgentProgressPro
                     </div>
                   )}
                   
-                  {/* Empty state for pending stages */}
-                  {isPending && (!stage.logs || stage.logs.length === 0) && (
-                    <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 mt-4 text-center">
-                      <div className="text-sm text-gray-500 dark:text-gray-400 flex items-center justify-center gap-2">
-                        <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
-                        Waiting to start...
-                      </div>
-                    </div>
-                  )}
+
                 </div>
               </div>
             );

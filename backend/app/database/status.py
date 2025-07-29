@@ -58,10 +58,15 @@ class StatusDB(BaseDB):
     @classmethod
     def update_step_status(cls, prompt_id: str, status: str, message: str = None, progress: float = None) -> bool:
         """Update workflow status"""
+        print(f"🔍 StatusDB.update_step_status called: prompt_id={prompt_id}, status={status}, progress={progress}")
+        
         # First, get current document to calculate proper step counts
         current_doc = cls.get_one({"prompt_id": ObjectId(prompt_id)})
         if not current_doc:
+            print(f"❌ No status document found for prompt_id: {prompt_id}")
             return False
+        
+        print(f"✅ Found status document: {current_doc.get('_id')}")
         
         update_data = {
             "overall_status": status
@@ -90,20 +95,27 @@ class StatusDB(BaseDB):
             update_data["completed_at"] = datetime.now()
         
         # Build the update query
+        print(f"📝 Update data prepared: {update_data}")
+        
         if "$push" in update_data:
+            update_query = {
+                "$set": {k: v for k, v in update_data.items() if k != "$push"},
+                "$push": update_data["$push"]
+            }
+            print(f"🔄 Executing update with $push: {update_query}")
             result = cls.update_one(
                 {"prompt_id": ObjectId(prompt_id)},
-                {
-                    "$set": {k: v for k, v in update_data.items() if k != "$push"},
-                    "$push": update_data["$push"]
-                }
+                update_query
             )
         else:
+            update_query = {"$set": update_data}
+            print(f"🔄 Executing update with $set: {update_query}")
             result = cls.update_one(
                 {"prompt_id": ObjectId(prompt_id)},
-                {"$set": update_data}
+                update_query
             )
         
+        print(f"📊 Update result: {result}")
         return result  # cls.update_one already returns boolean
     
     @classmethod
